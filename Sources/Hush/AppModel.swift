@@ -42,6 +42,14 @@ final class AppModel {
     var demo = false
     /// A notification tap asks the popover to open this chat.
     var pendingChat: Int64?
+    /// Form drafts live here, not in the views: the popover is destroyed whenever it closes, and you leave it to copy values elsewhere.
+    /// Memory only, never written to disk.
+    var draftKeyId = ""
+    var draftKeyHash = ""
+    var draftPhone = ""
+    var draftCode = ""
+    var draftPassword = ""
+    var draftMessages: [Int64: String] = [:]
 
     private var popoverVisible = false
 
@@ -67,6 +75,7 @@ final class AppModel {
 
     func setPopoverVisible(_ v: Bool) {
         popoverVisible = v
+        if session.phase == .ready { draftCode = ""; draftPassword = ""; draftPhone = "" }   // sign-in finished: forget what was typed
         if v, !demo { setupState = SetupState.detect(); if !needsSetup, session.phase == .stopped { start() } }
     }
 
@@ -142,6 +151,7 @@ final class AppModel {
         guard let keys = TelegramKeys.parse(id: id, hash: hash) else {
             return "The API ID is a number and the hash is 32 letters and digits. Copy both from my.telegram.org/apps."
         }
+        draftKeyId = ""; draftKeyHash = ""
         do { try keys.save() } catch { return "Could not save the key: \(error.localizedDescription)" }
         setupState = SetupState.detect()
         start()

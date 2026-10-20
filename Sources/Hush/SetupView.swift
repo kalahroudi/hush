@@ -87,8 +87,7 @@ struct SetupView: View {
 /// Asks for the Telegram API ID and hash. They are free, take a minute to get, and are saved in a private file on this Mac.
 struct KeysForm: View {
     let pageURL: String
-    @State private var id = ""
-    @State private var hash = ""
+    private let model = AppModel.shared
     @State private var error: String?
 
     var body: some View {
@@ -96,11 +95,12 @@ struct KeysForm: View {
             Text("1. Sign in at my.telegram.org/apps with your phone number.\n2. Create an app (any name, e.g. Hush).\n3. Copy the API ID and API hash here.")
                 .font(.system(size: 11.5)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             if let u = URL(string: pageURL) { Link("Open my.telegram.org/apps", destination: u).font(.system(size: 12.5)) }
-            TextField("API ID (a number)", text: $id).textFieldStyle(.roundedBorder).font(.system(size: 12.5, design: .monospaced))
-            SecureField("API hash (32 characters)", text: $hash).textFieldStyle(.roundedBorder).font(.system(size: 12.5, design: .monospaced))
+            @Bindable var m = model
+            TextField("API ID (a number)", text: $m.draftKeyId).textFieldStyle(.roundedBorder).font(.system(size: 12.5, design: .monospaced))
+            SecureField("API hash (32 characters)", text: $m.draftKeyHash).textFieldStyle(.roundedBorder).font(.system(size: 12.5, design: .monospaced))
             if let e = error { Text(e).font(.system(size: 11.5)).foregroundStyle(Theme.danger).fixedSize(horizontal: false, vertical: true) }
-            Button("Save key") { error = AppModel.shared.saveKeys(id: id, hash: hash) }.buttonStyle(Pill(kind: .primary))
-                .disabled(id.isEmpty || hash.isEmpty)
+            Button("Save key") { error = model.saveKeys(id: model.draftKeyId, hash: model.draftKeyHash) }.buttonStyle(Pill(kind: .primary))
+                .disabled(model.draftKeyId.isEmpty || model.draftKeyHash.isEmpty)
         }
     }
 }

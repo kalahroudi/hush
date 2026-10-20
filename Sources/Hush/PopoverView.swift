@@ -111,8 +111,11 @@ struct RowStyle: ButtonStyle {
 struct ThreadView: View {
     let model = AppModel.shared
     let prefs = Prefs.shared
-    @State private var draft = ""
     @State private var sending = false
+    private var draft: Binding<String> {
+        let id = model.session.openChat?.id ?? 0
+        return Binding(get: { model.draftMessages[id] ?? "" }, set: { model.draftMessages[id] = $0.isEmpty ? nil : $0 })
+    }
     @FocusState private var focused: Bool
 
     var body: some View {
@@ -145,7 +148,7 @@ struct ThreadView: View {
                 .onAppear { if let id = s.lines.last?.id { proxy.scrollTo(id, anchor: .bottom) } }
             }
             HStack(spacing: 8) {
-                TextField("Message", text: $draft).textFieldStyle(.plain).font(.system(size: 13.5)).focused($focused).onSubmit(send).disabled(sending)
+                TextField("Message", text: draft).textFieldStyle(.plain).font(.system(size: 13.5)).focused($focused).onSubmit(send).disabled(sending)
                 Text("Return").font(.system(size: 10.5, design: .monospaced)).foregroundStyle(.secondary)
             }.padding(.horizontal, 14).padding(.vertical, 11).overlay(alignment: .top) { Divider() }
         }
@@ -153,10 +156,10 @@ struct ThreadView: View {
     }
 
     private func send() {
-        guard let id = model.session.openChat?.id, !draft.trimmingCharacters(in: .whitespaces).isEmpty else { return }
-        let text = draft; draft = ""; sending = true
+        guard let id = model.session.openChat?.id, !draft.wrappedValue.trimmingCharacters(in: .whitespaces).isEmpty else { return }
+        let text = draft.wrappedValue; model.draftMessages[id] = nil; sending = true
         Task {
-            do { try await model.session.send(text, to: id) } catch { draft = text; model.show(error.localizedDescription, error: true) }
+            do { try await model.session.send(text, to: id) } catch { model.draftMessages[id] = text; model.show(error.localizedDescription, error: true) }
             sending = false; focused = true
         }
     }
@@ -165,26 +168,23 @@ struct ThreadView: View {
 /// Telegram sign-in: phone, then code, then password if the account has one.
 struct LoginView: View {
     let model = AppModel.shared
-    @State private var phone = ""
-    @State private var code = ""
-    @State private var password = ""
-
     var body: some View {
+        @Bindable var m = model
         let s = model.session
         VStack(alignment: .leading, spacing: 12) {
             switch s.phase {
             case .waitPhone:
                 title("Sign in to Telegram", "Use the phone number of your Telegram account. Your session stays on this Mac.")
-                TextField("+44 7700 900123", text: $phone).textFieldStyle(.roundedBorder).onSubmit { s.submitPhone(phone) }
-                Button("Send code") { s.submitPhone(phone) }.buttonStyle(Pill(kind: .primary)).disabled(phone.isEmpty)
+                TextField("+44 7700 900123", text: $m.draftPhone).textFieldStyle(.roundedBorder).onSubmit { s.submitPhone(m.draftPhone) }
+                Button("Send code") { s.submitPhone(m.draftPhone) }.buttonStyle(Pill(kind: .primary)).disabled(m.draftPhone.isEmpty)
             case .waitCode(let hint):
                 title("Enter the code", hint)
-                TextField("12345", text: $code).textFieldStyle(.roundedBorder).font(.system(size: 14, design: .monospaced)).onSubmit { s.submitCode(code) }
-                Button("Continue") { s.submitCode(code) }.buttonStyle(Pill(kind: .primary)).disabled(code.isEmpty)
+                TextField("12345", text: $m.draftCode).textFieldStyle(.roundedBorder).font(.system(size: 14, design: .monospaced)).onSubmit { s.submitCode(m.draftCode) }
+                Button("Continue") { s.submitCode(m.draftCode) }.buttonStyle(Pill(kind: .primary)).disabled(m.draftCode.isEmpty)
             case .waitPassword(let hint):
                 title("Two-step password", hint.isEmpty ? "Your account has a cloud password." : "Hint: \(hint)")
-                SecureField("Password", text: $password).textFieldStyle(.roundedBorder).onSubmit { s.submitPassword(password) }
-                Button("Continue") { s.submitPassword(password) }.buttonStyle(Pill(kind: .primary)).disabled(password.isEmpty)
+                SecureField("Password", text: $m.draftPassword).textFieldStyle(.roundedBorder).onSubmit { s.submitPassword(m.draftPassword) }
+                Button("Continue") { s.submitPassword(m.draftPassword) }.buttonStyle(Pill(kind: .primary)).disabled(m.draftPassword.isEmpty)
             case .unsupported(let m):
                 title("Can't sign in", m)
             default:
