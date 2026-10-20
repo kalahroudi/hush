@@ -52,6 +52,8 @@ fi
 if pgrep -x Hush >/dev/null; then say "Quitting the running Hush"; osascript -e 'tell application "Hush" to quit' 2>/dev/null || pkill -x Hush || true; sleep 1; fi
 rm -rf "$DEST/Hush.app"
 ditto "$SRC" "$DEST/Hush.app"
+# Not notarized yet: clear the download quarantine flag so Gatekeeper does not block the first launch.
+xattr -dr com.apple.quarantine "$DEST/Hush.app" 2>/dev/null || true
 say "Installed $DEST/Hush.app"
 
 # Add prerequisite hints here if the app needs tools. The app itself detects and installs them on first launch (see references/setup-wizard.md).

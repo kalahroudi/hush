@@ -28,7 +28,17 @@ Only send a message with hush_send after I tell you what to say. Every send also
 curl -fsSL https://raw.githubusercontent.com/kalahroudi/hush/main/scripts/install.sh | bash
 ```
 
-Or download the DMG from [Releases](https://github.com/kalahroudi/hush/releases). Builds that are not notarized open with right-click, Open, the first time.
+Or download the DMG from [Releases](https://github.com/kalahroudi/hush/releases) and drag Hush to Applications.
+
+### If macOS says it can't verify Hush
+
+Hush is not notarized by Apple yet, so a DMG downloaded in a browser is blocked the first time. The install script above avoids this. For the DMG:
+
+1. Open Hush once and dismiss the warning (do not choose Move to Bin).
+2. Open **System Settings, Privacy & Security** and scroll to **Security**.
+3. Click **Open Anyway** next to "Hush was blocked", then confirm with your password or Touch ID.
+
+You only do this once. Or run `xattr -dr com.apple.quarantine /Applications/Hush.app` in Terminal. Releases are signed and notarized automatically once a Developer ID certificate is added to the repo's secrets, and then this step disappears.
 
 Open Hush. The first-run setup has two steps:
 
