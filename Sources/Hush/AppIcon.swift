@@ -3,7 +3,6 @@
 import AppKit
 
 /// The app icon, drawn in code so the build needs no image tools and stays crisp at every size.
-/// REPLACE the gradient and glyph with the app's own mark (keep the structure: squircle tile, padded Dock variant).
 enum AppIcon {
     /// - padded: leave the transparent margin macOS expects around Dock icons (824 of 1024).
     static func image(size: CGFloat, padded: Bool = false) -> NSImage {
@@ -14,11 +13,27 @@ enum AppIcon {
             let shape = NSBezierPath(roundedRect: tile, xRadius: tile.width * 0.2246, yRadius: tile.width * 0.2246)
             NSGradient(starting: NSColor(srgbRed: 0.078, green: 0.439, blue: 0.486, alpha: 1), ending: NSColor(srgbRed: 0.027, green: 0.165, blue: 0.216, alpha: 1))?
                 .draw(in: shape, angle: -55)
-            let d = tile.width * 0.42
-            let dot = NSBezierPath(ovalIn: NSRect(x: tile.midX - d / 2, y: tile.midY - d / 2, width: d, height: d))
-            NSColor.white.setFill(); dot.fill()
+            // One solid dot (the unread dot from the menu bar) with two rings that fade out: sound, hushed.
+            func ring(_ fraction: CGFloat, _ width: CGFloat, _ alpha: CGFloat) {
+                let d = tile.width * fraction
+                let p = NSBezierPath(ovalIn: NSRect(x: tile.midX - d / 2, y: tile.midY - d / 2, width: d, height: d))
+                p.lineWidth = tile.width * width
+                NSColor.white.withAlphaComponent(alpha).setStroke(); p.stroke()
+            }
+            ring(0.74, 0.022, 0.16)
+            ring(0.56, 0.028, 0.34)
+            let d = tile.width * 0.30
+            NSColor.white.setFill()
+            NSBezierPath(ovalIn: NSRect(x: tile.midX - d / 2, y: tile.midY - d / 2, width: d, height: d)).fill()
             return true
         }
+    }
+
+    /// Writes the logo as a PNG (no Dock margin) for the README and the docs site.
+    static func writeLogo(to path: String, size: CGFloat = 512) throws {
+        guard let tiff = image(size: size).tiffRepresentation, let rep = NSBitmapImageRep(data: tiff),
+              let png = rep.representation(using: .png, properties: [:]) else { return }
+        try png.write(to: URL(fileURLWithPath: path))
     }
 
     /// Writes an .iconset folder for `iconutil -c icns`.

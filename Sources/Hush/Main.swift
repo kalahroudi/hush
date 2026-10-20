@@ -17,6 +17,9 @@ enum HushMain {
         if let i = args.firstIndex(of: "--write-iconset"), i + 1 < args.count {
             do { try AppIcon.writeIconset(to: args[i + 1]); exit(0) } catch { FileHandle.standardError.write(Data("\(error)\n".utf8)); exit(1) }
         }
+        if let i = args.firstIndex(of: "--write-logo"), i + 1 < args.count {
+            do { try AppIcon.writeLogo(to: args[i + 1]); exit(0) } catch { FileHandle.standardError.write(Data("\(error)\n".utf8)); exit(1) }
+        }
         if let i = args.firstIndex(of: "--snapshot"), i + 1 < args.count { SnapshotMode.dir = args[i + 1] }
 
         // Only one copy may run: two would poll the same resources and fight over the menu bar item.

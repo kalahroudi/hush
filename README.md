@@ -1,4 +1,6 @@
-# Hush
+<p align="center"><img src="docs/assets/logo.png" alt="Hush logo" width="112"></p>
+
+<h1 align="center">Hush</h1>
 
 Telegram as plain text in your Mac menu bar. A list of chats, one conversation, one box to type in. No avatars, stickers, media, search, replies or forwards. Agents get the same text through MCP.
 
