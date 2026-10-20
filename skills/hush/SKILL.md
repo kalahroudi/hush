@@ -35,6 +35,6 @@ Hush is a text-only Telegram client in the Mac menu bar. The tools show exactly 
 Only install when `/Applications/Hush.app` does not exist.
 
 1. `curl -fsSL https://raw.githubusercontent.com/kalahroudi/hush/main/scripts/install.sh | bash`
-2. Hush opens and its setup installs TDLib with Homebrew and asks for a free Telegram API ID and hash from https://my.telegram.org/apps. The user enters those in the Hush window, never in chat.
+2. Hush opens and its setup downloads TDLib into its own folder and asks for a free Telegram API ID and hash from https://my.telegram.org/apps. The user enters those in the Hush window, never in chat.
 3. Register the MCP server: `claude mcp add hush --scope user -- /Applications/Hush.app/Contents/MacOS/hush-mcp`
 4. Call `hush_status` and report what it says.

@@ -42,7 +42,7 @@ You only do this once. Or run `xattr -dr com.apple.quarantine /Applications/Hush
 
 Open Hush. The first-run setup has two steps:
 
-1. **TDLib.** Telegram's official client library. Hush loads it at runtime, so the app itself stays about 4 MB. Click **Set everything up** and Hush runs `brew install tdlib` for you. Without Homebrew, it shows the command to install it.
+1. **TDLib.** Telegram's official client library. Click **Set everything up** and Hush downloads its own current copy (about 11 MB, checksum verified) into `~/Library/Application Support/Hush/lib`. No Homebrew and no admin rights. An old TDLib from Homebrew is ignored, because Telegram refuses to sign in with it.
 2. **Telegram API key.** Telegram asks every client app for a free API ID and hash. Open [my.telegram.org/apps](https://my.telegram.org/apps), sign in, create an app (any name), and paste both values into the setup form. They identify the app, not your account, and are stored in a private file on your Mac.
 
 Then sign in with your phone number and the code Telegram sends you.
@@ -83,7 +83,7 @@ An agent skill that explains when and how to use the tools is in [`skills/hush`]
 - No polling. Telegram pushes updates, and nothing runs for the interface while the popover is closed.
 - The popover and settings window are destroyed when closed. The footer of the popover shows the app's own memory footprint.
 - No message or file database. History is fetched when you open a chat and dropped when you leave it.
-- No third-party Swift packages. TDLib is loaded at runtime.
+- No third-party Swift packages. TDLib is loaded at runtime from its own private copy.
 
 ## Privacy and security
 
@@ -98,7 +98,7 @@ Hush checks GitHub Releases at most once a day and updates in place, keeping the
 
 ## Build from source
 
-Needs the Xcode command line tools and TDLib (`brew install tdlib`) for running.
+Needs the Xcode command line tools. To run the app, first open it once and let setup download TDLib, or build the library yourself with `scripts/build-tdlib.sh` (needs `brew install cmake gperf openssl@3`).
 
 ```sh
 swift build && swift test
