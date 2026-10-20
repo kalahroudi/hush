@@ -36,6 +36,8 @@ public final class TelegramSession {
     private var quitting = false
     private let paths: AppPaths
     private let maxLines = 200
+    /// How many chats TDLib is asked to hold. Every loaded chat stays in TDLib's memory, so start small.
+    public static let initialChats = 20
 
     public init(paths: AppPaths = AppPaths()) { self.paths = paths }
 
@@ -150,8 +152,14 @@ public final class TelegramSession {
             if let u = try? await c.request(["@type": "getMe"]) {
                 me = [u.str("first_name"), u.str("last_name")].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " ")
             }
-            _ = try? await c.request(["@type": "loadChats", "chat_list": ["@type": "chatListMain"], "limit": 40])
+            _ = try? await c.request(["@type": "loadChats", "chat_list": ["@type": "chatListMain"], "limit": Self.initialChats])
         }
+    }
+
+    /// Loads older chats too; used by "show all" in the inbox. Errors mean the list is already complete.
+    public func loadMoreChats(limit: Int = 100) {
+        guard let c = client else { return }
+        Task { _ = try? await c.request(["@type": "loadChats", "chat_list": ["@type": "chatListMain"], "limit": limit]) }
     }
 
     // MARK: Conversation

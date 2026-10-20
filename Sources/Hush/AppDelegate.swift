@@ -11,7 +11,8 @@ import HushKit
 final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPopoverDelegate, UNUserNotificationCenterDelegate {
     static var shared: AppDelegate { NSApp.delegate as! AppDelegate }
     private var statusItem: NSStatusItem!
-    private let popover = NSPopover()
+    /// Created on open and dropped on close: a retained popover keeps its window and backing surfaces alive.
+    private var popover: NSPopover?
     private var settingsWindow: NSWindow?
     private let model = AppModel.shared
 
@@ -28,9 +29,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
         statusItem.button?.sendAction(on: [.leftMouseUp, .rightMouseUp])
         statusItem.button?.setAccessibilityLabel("Hush")
 
-        popover.behavior = .transient
-        popover.animates = true
-        popover.delegate = self
         UNUserNotificationCenter.current().delegate = self
         model.start()
         HotKey.onPress = { [weak self] in self?.togglePopover() }
@@ -45,7 +43,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
     /// The popover does not follow NSApp.appearance on its own (it takes the menu bar's look), so set it explicitly.
     func applyAppearance() {
         let dark = NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
-        popover.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
+        popover?.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
     }
 
     @objc func openSettings() { showSettings() }
@@ -62,8 +60,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
     }
 
     @objc private func togglePopover() {
-        if popover.isShown { popover.performClose(nil); return }
+        if let p = popover, p.isShown { p.performClose(nil); return }
         guard let button = statusItem.button else { return }
+        let popover = NSPopover()
+        popover.behavior = .transient
+        popover.animates = true
+        popover.delegate = self
+        self.popover = popover
         applyAppearance()
         let host = NSHostingController(rootView: PopoverView(openSettings: { [weak self] in self?.showSettings() }))
         host.sizingOptions = .preferredContentSize
@@ -78,17 +81,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
         let id = (response.notification.request.content.userInfo["chat"] as? String).flatMap { Int64($0) }
         Task { @MainActor in
             AppModel.shared.pendingChat = id
-            if !self.popover.isShown { self.togglePopover() }
+            if self.popover?.isShown != true { self.togglePopover() }
         }
         done()
     }
 
     func popoverDidClose(_ notification: Notification) {
-        popover.contentViewController = nil   // release the popover's views while hidden
+        popover?.contentViewController = nil   // release the popover's views while hidden
+        popover = nil                          // and its window, so no backing surfaces linger
+        Task {                                 // let the views deinit, then hand freed heap pages back to the OS
+            try? await Task.sleep(for: .milliseconds(300))
+            malloc_zone_pressure_relief(nil, 0)
+        }
     }
 
     func showSettings(agents: Bool = false) {
-        popover.performClose(nil)
+        popover?.performClose(nil)
         if settingsWindow == nil {
             let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 820, height: 560),
                              styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
@@ -115,7 +123,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
 
     // Clicking the Dock icon opens the popover.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        if !popover.isShown { togglePopover() }; return true
+        if popover?.isShown != true { togglePopover() }; return true
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {

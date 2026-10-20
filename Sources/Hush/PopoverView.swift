@@ -46,8 +46,19 @@ struct InboxView: View {
     let model = AppModel.shared
     let prefs = Prefs.shared
     var openSettings: () -> Void
+    @State private var showAll = false
+
+    /// Chats worth listing: unread, favorite, or active in the last week. The rest hide behind "show all".
+    private var visible: [ChatSummary] {
+        let all = model.session.chats
+        if showAll { return all }
+        let cutoff = Date.now.addingTimeInterval(-7 * 86_400)
+        return all.filter { $0.unread > 0 || prefs.isFavorite($0.id) || ($0.lastDate ?? .distantPast) > cutoff }
+    }
 
     var body: some View {
+        let shown = visible
+        let hidden = model.session.chats.count - shown.count
         VStack(spacing: 0) {
             Header {
                 Text("Hush").font(.system(size: 13.5, weight: .semibold))
@@ -61,14 +72,23 @@ struct InboxView: View {
             } else {
                 ScrollView {
                     LazyVStack(spacing: 0) {
-                        ForEach(model.session.chats.prefix(40)) { chat in
+                        ForEach(shown) { chat in
                             Button { model.session.open(chat) } label: { Row(chat: chat, favorite: prefs.isFavorite(chat.id)) }.buttonStyle(RowStyle())
+                        }
+                        if hidden > 0 || showAll {
+                            Button {
+                                showAll.toggle()
+                                if showAll { model.session.loadMoreChats() }
+                            } label: {
+                                Text(showAll ? "Show active only" : "Show \(hidden) older")
+                                    .font(.system(size: 11.5)).foregroundStyle(Theme.accent).frame(maxWidth: .infinity).padding(.vertical, 10)
+                            }.buttonStyle(.plain)
                         }
                     }
                 }
             }
             HStack {
-                Text("\(model.session.chats.count) chats").font(.system(size: 10.5, design: .monospaced))
+                Text(hidden > 0 ? "\(shown.count) of \(model.session.chats.count) chats" : "\(shown.count) chats").font(.system(size: 10.5, design: .monospaced))
                 Spacer()
                 Text(model.demo ? "" : AppMemory.footprint).font(.system(size: 10.5, design: .monospaced))
             }.foregroundStyle(.secondary).padding(.horizontal, 14).padding(.vertical, 6).overlay(alignment: .top) { Divider() }
