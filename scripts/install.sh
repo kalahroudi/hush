@@ -56,4 +56,4 @@ say "Installed $DEST/Hush.app"
 
 # Add prerequisite hints here if the app needs tools. The app itself detects and installs them on first launch (see references/setup-wizard.md).
 open "$DEST/Hush.app"
-say "Done. Look for the cube icon in your menu bar."
+say "Done. Look for the dot in your menu bar."
