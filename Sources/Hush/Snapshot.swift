@@ -16,7 +16,7 @@ enum SnapshotMode {
         Demo.install()
         Task { @MainActor in
             for shot in shots { await render(shot, to: dir) }
-            NSApp.terminate(nil)
+            exit(0)
         }
     }
 

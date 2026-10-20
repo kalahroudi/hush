@@ -155,3 +155,24 @@ final class TDLibTests: XCTestCase {
         client.stop()
     }
 }
+
+final class ShortcutTests: XCTestCase {
+    func testDisplayAndValidity() {
+        XCTAssertEqual(Shortcut.default.display, "⌃⌥H")
+        XCTAssertTrue(Shortcut.default.isValid)
+        XCTAssertFalse(Shortcut(keyCode: 4, modifiers: Shortcut.shift).isValid)   // shift alone would fire while typing
+        XCTAssertFalse(Shortcut(keyCode: 4, modifiers: 0).isValid)
+        XCTAssertFalse(Shortcut(keyCode: 999, modifiers: Shortcut.cmd).isValid)   // unknown key
+    }
+
+    func testCocoaFlagConversion() {
+        let flags: UInt = (1 << 20) | (1 << 19) | (1 << 17)   // command, option, shift
+        let s = Shortcut(keyCode: 49, cocoaFlags: flags)
+        XCTAssertEqual(s.display, "⌥⇧⌘Space")
+    }
+
+    func testCodable() throws {
+        let data = try JSONEncoder().encode(Shortcut.default)
+        XCTAssertEqual(try JSONDecoder().decode(Shortcut.self, from: data), .default)
+    }
+}

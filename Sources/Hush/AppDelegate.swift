@@ -33,6 +33,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
         popover.delegate = self
         UNUserNotificationCenter.current().delegate = self
         model.start()
+        HotKey.onPress = { [weak self] in self?.togglePopover() }
+        Prefs.shared.setShortcut(Prefs.shared.shortcut)   // registers the saved (or default) shortcut
         watchStatus()
         startControl()
         Updater.shared.confirmLaunch()                                   // tells a pending swap script "the new version started"

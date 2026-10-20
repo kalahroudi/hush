@@ -47,6 +47,9 @@ struct SettingsPane: View {
                         Toggle("", isOn: $p.banners).labelsHidden().toggleStyle(.switch).tint(Theme.accent)
                     }
                 }
+                SettingsGroup("Shortcut") {
+                    SettingRow("Open Hush", "Show or hide the popover from anywhere. Click the box, then press the keys.", error: prefs.shortcutError) { ShortcutRecorder() }
+                }
                 SettingsGroup("Startup") {
                     SettingRow("Launch at login", "Adds Hush to Login Items. Turn it off any time.", error: prefs.launchAtLoginError) { Toggle("", isOn: Binding(get: { prefs.launchAtLogin }, set: { prefs.setLaunchAtLogin($0) })).labelsHidden().toggleStyle(.switch).tint(Theme.accent) }
                 }
@@ -57,7 +60,7 @@ struct SettingsPane: View {
                     SettingRow("Dock icon", "Off by default. Hush lives in the menu bar.") { Toggle("", isOn: $p.showDockIcon).labelsHidden().toggleStyle(.switch).tint(Theme.accent) }
                 }
                 SettingsGroup("Performance") {
-                    SettingRow("Always light", "Telegram pushes updates, so Hush never polls. Messages are loaded when you open a chat and dropped when you close it.") { Badge(text: AppMemory.footprint, kind: .ok) }
+                    SettingRow("Always light", "Telegram pushes updates, so Hush never polls. Messages are loaded when you open a chat and dropped when you close it.") { Badge(text: AppModel.shared.demo ? "no polling" : AppMemory.footprint, kind: .ok) }
                 }
             }.frame(maxWidth: .infinity)
         }

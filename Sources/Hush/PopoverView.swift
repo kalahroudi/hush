@@ -21,7 +21,7 @@ struct PopoverView: View {
         .background(Theme.pane)                                   // opaque and themed: the popover must follow the app theme
         .overlay(alignment: .bottom) { ToastView() }
         .onAppear { model.setPopoverVisible(true) }
-        .onDisappear { model.setPopoverVisible(false); model.session.closeChat() }
+        .onDisappear { model.setPopoverVisible(false); if !model.demo { model.session.closeChat() } }
     }
 }
 
@@ -70,7 +70,7 @@ struct InboxView: View {
             HStack {
                 Text("\(model.session.chats.count) chats").font(.system(size: 10.5, design: .monospaced))
                 Spacer()
-                Text(AppMemory.footprint).font(.system(size: 10.5, design: .monospaced))
+                Text(model.demo ? "" : AppMemory.footprint).font(.system(size: 10.5, design: .monospaced))
             }.foregroundStyle(.secondary).padding(.horizontal, 14).padding(.vertical, 6).overlay(alignment: .top) { Divider() }
         }
         .task {

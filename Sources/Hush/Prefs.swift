@@ -3,6 +3,7 @@
 import SwiftUI
 import ServiceManagement
 import AppKit
+import HushKit
 
 enum ThemeChoice: String, CaseIterable { case system, light, dark
     var label: String { rawValue.capitalized }
@@ -23,6 +24,8 @@ final class Prefs {
     var banners: Bool { didSet { d.set(banners, forKey: "banners") } }
     var agentsCanRead: Bool { didSet { d.set(agentsCanRead, forKey: "agentsCanRead") } }
     private(set) var favorites: Set<Int64>
+    private(set) var shortcut: Shortcut?
+    private(set) var shortcutError: String?
     var updateChannel: UpdateChannel { didSet { d.set(updateChannel.rawValue, forKey: "updateChannel") } }
     var autoCheckUpdates: Bool { didSet { d.set(autoCheckUpdates, forKey: "autoCheckUpdates") } }
 
@@ -45,6 +48,16 @@ final class Prefs {
             setLaunchAtLogin(true)
         }
         refreshLaunchAtLogin()
+        // First run gets the default shortcut. After that, "None" is a valid choice and is remembered.
+        if d.object(forKey: "shortcutSet") == nil { shortcut = .default }
+        else { shortcut = d.data(forKey: "shortcut").flatMap { try? JSONDecoder().decode(Shortcut.self, from: $0) } }
+    }
+
+    func setShortcut(_ s: Shortcut?) {
+        shortcut = s
+        d.set(true, forKey: "shortcutSet")
+        d.set(s.flatMap { try? JSONEncoder().encode($0) }, forKey: "shortcut")
+        shortcutError = HotKey.apply(s)
     }
 
     func isFavorite(_ id: Int64) -> Bool { favorites.contains(id) }
