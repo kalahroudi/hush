@@ -115,7 +115,7 @@ struct PopoverShot: View {
     static func setup() {
         install()
         AppModel.shared.setupState = SetupState(items: [
-            Prereq(id: "tdlib", title: "TDLib", detail: "Telegram's official client library. Hush loads it at runtime, so Hush itself stays tiny.", install: .brew("tdlib"), isMet: true),
+            Prereq(id: "tdlib", title: "TDLib", detail: "Telegram's official client library. Hush keeps its own copy, so nothing global is installed.", install: .download, isMet: true),
             Prereq(id: "keys", title: "Telegram API key", detail: "A free API ID and hash from Telegram. They identify this app, not your account.", install: .credentials(TelegramKeys.pageURL), isMet: false),
         ])
     }

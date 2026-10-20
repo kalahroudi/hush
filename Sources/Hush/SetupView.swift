@@ -48,7 +48,7 @@ struct SetupView: View {
     private func manualStep(_ item: Prereq) -> Bool {
         switch item.install {
         case .command, .link, .credentials: return true
-        case .brew, .none: return false
+        case .brew, .download, .none: return false
         }
     }
 

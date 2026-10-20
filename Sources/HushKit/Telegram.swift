@@ -73,7 +73,7 @@ public enum MessageText {
         case "messageSticker": return marker("sticker", c.obj("sticker")?.str("emoji"))
         case "messageLocation", "messageVenue": return "[location]"
         case "messageContact": return "[contact]"
-        case "messagePoll": return marker("poll", c.obj("poll")?.str("question").map(oneLine))
+        case "messagePoll": return marker("poll", (c.obj("poll")?.obj("question")?.str("text") ?? c.obj("poll")?.str("question")).map(oneLine))   // a formattedText in current TDLib, a string in old
         case "messageCall": return "[call]"
         case "messagePinMessage": return "[pinned a message]"
         case "messageChatJoinByLink", "messageChatAddMembers", "messageChatJoinByRequest": return "[joined]"

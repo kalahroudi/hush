@@ -1,0 +1,26 @@
+name: TDLib
+
+# Builds the TDLib library Hush downloads on first run, from the commit pinned in scripts/build-tdlib.sh,
+# and publishes it as a `tdlib-<version>` release. Run it by hand when the pinned commit changes.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - run: brew install cmake gperf openssl@3
+      - run: scripts/build-tdlib.sh out
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="$(grep '^TD_VERSION=' scripts/build-tdlib.sh | cut -d'"' -f2)"
+          COMMIT="$(grep '^TD_COMMIT=' scripts/build-tdlib.sh | cut -d'"' -f2)"
+          gh release create "tdlib-$VERSION" out/*.tar.gz out/*.sha256 \
+            --title "TDLib $VERSION" --prerelease \
+            --notes "TDLib $VERSION (tdlib/td commit $COMMIT), built by scripts/build-tdlib.sh. Hush downloads this on first run. Not an app release."

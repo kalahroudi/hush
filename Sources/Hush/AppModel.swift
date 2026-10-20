@@ -137,11 +137,7 @@ final class AppModel {
     func setUpEverything() {
         let state = SetupState.detect()
         runTask("Setting up Hush", after: { [weak self] ok in if ok { self?.start() } }) { log in
-            if !state.brewFormulae.isEmpty {
-                guard state.homebrewPresent else { throw ShellError.failed(command: "setup", status: 1, stderr: "Homebrew is needed first. Install it, then try again.") }
-                log("Installing \(state.brewFormulae.joined(separator: ", ")) with Homebrew…")
-                try await SetupState.installMissing(state.brewFormulae, onLine: log)
-            }
+            if state.needsDownload { try await TDLibInstall.install(onLine: log) }
             try AppPaths().ensureDirectories()
         }
     }

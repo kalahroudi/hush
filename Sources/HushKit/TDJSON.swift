@@ -31,13 +31,37 @@ public final class TDLib: @unchecked Sendable {
          "/opt/homebrew/lib/libtdjson.dylib", "/usr/local/lib/libtdjson.dylib"]
     }
 
-    /// First candidate that exists on disk. Cheap, so setup detection can call it on every refresh.
-    public static func locate() -> String? {
-        candidates().first { FileManager.default.fileExists(atPath: $0) }
+    /// Telegram refuses to sign in from old TDLib builds (UPDATE_APP_TO_LOGIN). Homebrew still ships 1.8.0 from 2021.
+    public static let minimumVersion = "1.8.60"
+
+    nonisolated(unsafe) private static var cached: TDLib??
+    private static let cacheLock = NSLock()
+
+    /// The first installed library that is new enough, loaded once. Cheap after the first call, so setup can ask on every refresh.
+    public static func load() -> TDLib? {
+        cacheLock.lock(); defer { cacheLock.unlock() }
+        if let c = cached, c != nil { return c }
+        for path in candidates() where FileManager.default.fileExists(atPath: path) {
+            if let lib = TDLib(path: path), let v = lib.version, versionAtLeast(v, minimumVersion) { cached = .some(lib); return lib }
+        }
+        return nil   // not cached: a library installed a moment later is picked up on the next call
     }
 
-    public init?(path: String? = nil) {
-        guard let p = path ?? Self.locate(), let h = dlopen(p, RTLD_NOW | RTLD_LOCAL),
+    public static func versionAtLeast(_ v: String, _ minimum: String) -> Bool {
+        let a = v.split(separator: ".").map { Int($0) ?? 0 }, b = minimum.split(separator: ".").map { Int($0) ?? 0 }
+        for i in 0..<max(a.count, b.count) {
+            let x = i < a.count ? a[i] : 0, y = i < b.count ? b[i] : 0
+            if x != y { return x > y }
+        }
+        return true
+    }
+
+    public var version: String? {
+        execute(["@type": "getOption", "name": "version"])?.str("value")
+    }
+
+    public init?(path p: String) {
+        guard let h = dlopen(p, RTLD_NOW | RTLD_LOCAL),
               let a = dlsym(h, "td_create_client_id"), let b = dlsym(h, "td_send"),
               let c = dlsym(h, "td_receive"), let d = dlsym(h, "td_execute") else { return nil }
         createClientId = unsafeBitCast(a, to: CreateClientId.self)

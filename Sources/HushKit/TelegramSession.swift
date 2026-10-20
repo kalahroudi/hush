@@ -42,7 +42,7 @@ public final class TelegramSession {
     // MARK: Start / stop
 
     public func start() {
-        guard client == nil, let keys = TelegramKeys.load(paths), let lib = TDLib() else { return }
+        guard client == nil, let keys = TelegramKeys.load(paths), let lib = TDLib.load() else { return }
         self.keys = keys
         phase = .connecting
         let c = TDClient(lib: lib)

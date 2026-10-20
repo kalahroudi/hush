@@ -11,6 +11,7 @@ public struct Prereq: Identifiable, Equatable, Sendable {
         case brew(String)               // `brew install <formula>`, automated
         case command(String)            // runs in the user's terminal (needs a password or a TTY)
         case link(String)               // a download page; the user does it, then presses "check again"
+        case download                   // a private download the app does itself (no admin rights, no Homebrew)
         case credentials(String)        // values only the user can get; the setup screen shows a form, the string is the page to get them
         case none                       // nothing to install; only detected (e.g. a first-run resource)
     }
@@ -31,18 +32,20 @@ public struct SetupState: Equatable, Sendable {
 
     /// What Hush needs before it can show a single message, in install order.
     public static func detect() -> SetupState {
-        let haveLib = TDLib.locate() != nil
-        var items: [Prereq] = [
-            Prereq(id: "brew", title: "Homebrew", detail: "Installs TDLib, Telegram's official library, in one command.",
-                   install: .command(homebrewInstallCommand), isMet: Shell.find("brew") != nil),
-            Prereq(id: "tdlib", title: "TDLib", detail: "Telegram's official client library. Hush loads it at runtime, so Hush itself stays tiny.",
-                   install: .brew("tdlib"), isMet: haveLib),
+        let haveLib = TDLib.load() != nil
+        var tdDetail = "Telegram's official client library. Hush keeps its own copy, so nothing global is installed."
+        if !haveLib, TDLib.candidates().contains(where: { FileManager.default.fileExists(atPath: $0) }) {
+            tdDetail = "The TDLib on this Mac is too old: Telegram refuses to sign in with it. Hush installs a current copy of its own."
+        }
+        return SetupState(items: [
+            Prereq(id: "tdlib", title: "TDLib", detail: tdDetail, install: .download, isMet: haveLib),
             Prereq(id: "keys", title: "Telegram API key", detail: "A free API ID and hash from Telegram. They identify this app, not your account.",
                    install: .credentials(TelegramKeys.pageURL), isMet: TelegramKeys.load() != nil),
-        ]
-        if haveLib { items.removeAll { $0.id == "brew" } }   // nothing left to install with it, so do not show it
-        return SetupState(items: items)
+        ])
     }
+
+    /// True when the app can fetch something itself (the "Set everything up" button).
+    public var needsDownload: Bool { missing.contains { $0.install == .download } }
 
     public var missing: [Prereq] { items.filter { !$0.isMet } }
     public var ready: Bool { missing.isEmpty }
@@ -50,7 +53,7 @@ public struct SetupState: Equatable, Sendable {
     public var homebrewPresent: Bool { Shell.find("brew") != nil }
     /// Can the app install everything missing by itself?
     public var canAutoInstall: Bool {
-        !brewFormulae.isEmpty && homebrewPresent
+        needsDownload || (!brewFormulae.isEmpty && homebrewPresent)
     }
     /// One line the user can paste into Terminal to do the automated part by hand.
     public var manualCommand: String { brewFormulae.isEmpty ? "" : "brew install " + brewFormulae.joined(separator: " ") }

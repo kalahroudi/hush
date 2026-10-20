@@ -125,6 +125,14 @@ final class TelegramTests: XCTestCase {
         XCTAssertThrowsError(try ControlClient.call(["n": 1], socket: path, timeout: 2))
     }
 
+    func testTDLibVersionCheck() {
+        XCTAssertTrue(TDLib.versionAtLeast("1.8.69", "1.8.60"))
+        XCTAssertTrue(TDLib.versionAtLeast("1.8.60", "1.8.60"))
+        XCTAssertTrue(TDLib.versionAtLeast("1.9.0", "1.8.60"))
+        XCTAssertFalse(TDLib.versionAtLeast("1.8.0", "1.8.60"))   // the old Homebrew build Telegram rejects
+        XCTAssertFalse(TDLib.versionAtLeast("0.9", "1.8.60"))
+    }
+
     func testSetupListsKeysStep() {
         let s = SetupState.detect()
         XCTAssertTrue(s.items.contains { $0.id == "keys" })
@@ -135,7 +143,7 @@ final class TelegramTests: XCTestCase {
 final class TDLibTests: XCTestCase {
     /// Loads the real library when present, reaches the parameters state, and closes cleanly. Skipped where TDLib is not installed.
     func testClientReachesParametersAndCloses() async throws {
-        guard let lib = TDLib() else { throw XCTSkip("TDLib is not installed") }
+        guard let lib = TDLib.load() else { throw XCTSkip("A current TDLib is not installed") }
         let client = TDClient(lib: lib)
         let params = expectation(description: "wait parameters")
         let closed = expectation(description: "closed")
