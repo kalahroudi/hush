@@ -209,14 +209,50 @@ final class ShortcutTests: XCTestCase {
         ]
         let fav: (Int64) -> Bool = { $0 == 3 }
         let all = ChatListFilter.apply(chats, tab: .all, isFavorite: fav, now: now)
-        XCTAssertEqual(all.shown.map(\.id), [1, 3, 4]); XCTAssertEqual(all.hidden, 1, "quiet chats hide behind show older")
+        XCTAssertEqual(all.shown.map(\.id), [3, 1, 4]); XCTAssertEqual(all.hidden, 1, "quiet chats hide behind show older")
         XCTAssertEqual(ChatListFilter.apply(chats, tab: .all, showOlder: true, isFavorite: fav, now: now).shown.count, 4)
         XCTAssertEqual(ChatListFilter.apply(chats, tab: .unread, isFavorite: fav, now: now).shown.map(\.id), [1, 4])
         XCTAssertEqual(ChatListFilter.apply(chats, tab: .favorites, isFavorite: fav, now: now).shown.map(\.id), [3])
         let found = ChatListFilter.apply(chats, tab: .all, query: "old", isFavorite: fav, now: now)
-        XCTAssertEqual(found.shown.map(\.id), [2, 3], "search reaches old chats"); XCTAssertEqual(found.hidden, 0)
+        XCTAssertEqual(found.shown.map(\.id), [3, 2], "search reaches old chats"); XCTAssertEqual(found.hidden, 0)
         XCTAssertEqual(ChatListFilter.apply(chats, tab: .all, query: "DINNER", isFavorite: fav, now: now).shown.map(\.id), [1], "matches the last message, any case")
         XCTAssertEqual(ChatListFilter.unreadBadge(chats), 1, "muted chats do not count")
+    }
+
+    func testChatListFilterPinsFavoritesFirst() {
+        let now = Date()
+        let old = now.addingTimeInterval(-30 * 86_400)
+        func chat(_ id: Int64, _ date: Date, unread: Int = 0, muted: Bool = false) -> ChatSummary {
+            ChatSummary(id: id, title: "Chat \(id)", lastText: "", lastDate: date, unread: unread, muted: muted)
+        }
+        let chats = [chat(1, now), chat(2, old), chat(3, now), chat(4, now)]   // non-fav newest, fav old, non-fav, fav
+        func ids(_ cs: [ChatSummary], tab: ChatTab = .all, query: String = "", showOlder: Bool = false, favs: Set<Int64>? = nil) -> (shown: [Int64], hidden: Int) {
+            let f = favs ?? [2, 4]
+            let r = ChatListFilter.apply(cs, tab: tab, query: query, showOlder: showOlder, isFavorite: { f.contains($0) }, now: now)
+            return (r.shown.map(\.id), r.hidden)
+        }
+        // R1, R2, R7: favorites first in input order, non-favorites after in input order; the old favorite is shown and not counted hidden
+        let all = ids(chats)
+        XCTAssertEqual(all.shown, [2, 4, 1, 3]); XCTAssertEqual(all.hidden, 0)
+        // R3: toggling the predicate moves the chat at once
+        XCTAssertEqual(ids(chats, favs: [2, 4, 3]).shown, [2, 3, 4, 1])
+        XCTAssertEqual(ids(chats, favs: [4]).shown, [4, 1, 3], "unstarred old chat falls back to hidden older")
+        XCTAssertEqual(ids(chats, favs: [4]).hidden, 1)
+        // R4: a new message in a non-favorite does not displace favorites; in a favorite it reorders only among favorites
+        XCTAssertEqual(ids([chats[2], chats[0], chats[1], chats[3]]).shown, [2, 4, 3, 1])
+        XCTAssertEqual(ids([chats[3], chats[0], chats[1], chats[2]]).shown, [4, 2, 1, 3])
+        // R5: Unread tab pins favorites; Favorites tab keeps input order
+        let unread = [chat(1, now, unread: 1), chat(2, old, unread: 1), chat(3, now, unread: 1)]
+        XCTAssertEqual(ids(unread, tab: .unread, favs: [2]).shown, [2, 1, 3])
+        XCTAssertEqual(ids(chats, tab: .favorites).shown, [2, 4])
+        XCTAssertEqual(ids([chats[3], chats[1]], tab: .favorites).shown, [4, 2])
+        // R6: search keeps favorites first
+        XCTAssertEqual(ids(chats, query: "chat").shown, [2, 4, 1, 3])
+        // muted favorites are still pinned
+        let muted = [chat(1, now), chat(2, now, muted: true)]
+        XCTAssertEqual(ids(muted, favs: [2]).shown, [2, 1])
+        // R7 with show older on
+        XCTAssertEqual(ids(chats, showOlder: true).shown, [2, 4, 1, 3])
     }
 
     func testReportsNeverContainPersonalDetails() throws {

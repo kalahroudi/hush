@@ -48,17 +48,9 @@ struct InboxView: View {
     var openSettings: () -> Void
     @State private var showAll = false
 
-    /// Chats worth listing: unread, favorite, or active in the last week. The rest hide behind "show all".
-    private var visible: [ChatSummary] {
-        let all = model.session.chats
-        if showAll { return all }
-        let cutoff = Date.now.addingTimeInterval(-7 * 86_400)
-        return all.filter { $0.unread > 0 || prefs.isFavorite($0.id) || ($0.lastDate ?? .distantPast) > cutoff }
-    }
-
     var body: some View {
-        let shown = visible
-        let hidden = model.session.chats.count - shown.count
+        // Same ordering and "older" rule as the desktop window: favorites first, quiet chats behind "show all".
+        let (shown, hidden) = ChatListFilter.apply(model.session.chats, tab: .all, showOlder: showAll, isFavorite: prefs.isFavorite)
         VStack(spacing: 0) {
             Header {
                 Text("Hush").font(.system(size: 13.5, weight: .semibold))

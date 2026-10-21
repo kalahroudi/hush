@@ -15,7 +15,7 @@ public enum ChatListFilter {
         c.unread > 0 || isFavorite || (c.lastDate ?? .distantPast) > now.addingTimeInterval(-7 * 86_400)
     }
 
-    /// `hidden` counts chats the tab would show if older ones were included; it is 0 while searching or when `showOlder` is on.
+    /// Favorites are listed first in every tab and search, then the rest, each in the order given. `hidden` counts chats the tab would show if older ones were included; it is 0 while searching or when `showOlder` is on.
     public static func apply(_ chats: [ChatSummary], tab: ChatTab, query: String = "", showOlder: Bool = false,
                              isFavorite: (Int64) -> Bool, now: Date = .now) -> (shown: [ChatSummary], hidden: Int) {
         let inTab = chats.filter { c in
@@ -27,12 +27,17 @@ public enum ChatListFilter {
         }
         let q = query.trimmingCharacters(in: .whitespaces)
         if !q.isEmpty {   // a search looks through every loaded chat of the tab, old ones included
-            return (inTab.filter { $0.title.localizedCaseInsensitiveContains(q) || $0.lastText.localizedCaseInsensitiveContains(q) }, 0)
+            return (favoritesFirst(inTab.filter { $0.title.localizedCaseInsensitiveContains(q) || $0.lastText.localizedCaseInsensitiveContains(q) }, isFavorite), 0)
         }
         // Unread and Favorites are already narrow; only "All" hides quiet chats.
-        guard tab == .all, !showOlder else { return (inTab, 0) }
+        guard tab == .all, !showOlder else { return (favoritesFirst(inTab, isFavorite), 0) }
         let shown = inTab.filter { isActive($0, isFavorite: isFavorite($0.id), now: now) }
-        return (shown, inTab.count - shown.count)
+        return (favoritesFirst(shown, isFavorite), inTab.count - shown.count)
+    }
+
+    /// Stable partition: favorites above everyone else, each group keeping its input order (not `sort`, which is not stable).
+    private static func favoritesFirst(_ chats: [ChatSummary], _ isFavorite: (Int64) -> Bool) -> [ChatSummary] {
+        chats.filter { isFavorite($0.id) } + chats.filter { !isFavorite($0.id) }
     }
 
     /// The number on the Unread tab: chats with unread messages that are not muted.
