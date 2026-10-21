@@ -258,7 +258,7 @@ public struct UpdateProblem: Equatable, Sendable {
             case .buildFailed(let m):
                 let lower = m.lowercased()
                 if ["could not resolve host", "unable to access", "network is unreachable", "timed out", "connection"].contains(where: lower.contains) { return network(detail: m) }
-                return .init(title: "The new version couldn't be built", hint: "\(untouched) Try again later, or switch the update channel to Releases for a prebuilt version.", detail: m)
+                return .init(title: "The new version couldn't be built", hint: "\(untouched) Switch the update channel to Releases for a prebuilt version, or press Report on GitHub so we can fix it.", detail: m)
             case .verifyFailed(let m): return .init(title: "The new version didn't pass its safety checks", hint: "Nothing was replaced. \(untouched)", detail: m)
             }
         }
@@ -286,5 +286,27 @@ public struct UpdateProblem: Equatable, Sendable {
     /// The same, for pasting into a bug report.
     public func report(step: String, app: String, system: String) -> String {
         "Hush update problem\n\(title)\n\(hint)\nStep: \(step)\nApp: \(app)\nSystem: \(system)\nDetail: \(detail)"
+    }
+
+    /// A prefilled "new issue" page. GitHub caps URL length, so only the end of the log goes in the link;
+    /// the app also copies the whole log so it can be pasted over it.
+    public func issueURL(repo: String, step: String, app: String, system: String, log: String, maxLog: Int = 3500) -> URL? {
+        let body = """
+        **\(title)**
+
+        - Step: \(step)
+        - App: \(app)
+        - System: \(system)
+
+        <details><summary>Update error log</summary>
+
+        ```
+        \(String(log.suffix(maxLog)))
+        ```
+        </details>
+        """
+        var c = URLComponents(string: "https://github.com/\(repo)/issues/new")
+        c?.queryItems = [.init(name: "title", value: "Update failed: \(title)"), .init(name: "body", value: body), .init(name: "labels", value: "update")]
+        return c?.url
     }
 }

@@ -66,6 +66,18 @@ final class Updater {
         return p
     }
 
+    /// The whole persistent error log, or this run's report when nothing has been written yet.
+    var errorLogText: String { (try? String(contentsOf: errorLogURL, encoding: .utf8)).flatMap { $0.isEmpty ? nil : $0 } ?? problemReport }
+
+    /// Copies the full error log, then opens a prefilled GitHub issue (the link only has room for the end of it).
+    func reportOnGitHub() {
+        let log = errorLogText
+        Clipboard.copy(log)
+        guard let p = problem, let url = p.issueURL(repo: build.repo, step: step, app: appSummary, system: systemSummary, log: log) else { return }
+        NSWorkspace.shared.open(url)
+        AppModel.shared.show("Full error log copied. Paste it into the issue if it needs more detail.")
+    }
+
     var problemReport: String { problem.map { $0.report(step: step, app: appSummary, system: systemSummary) } ?? "" }
 
     private func beginRun(to target: String) {
@@ -303,12 +315,19 @@ final class Updater {
 
     /// Runs a tool, streaming its output into the visible log.
     private func run(_ exe: String, _ args: [String], cwd: URL? = nil, env: [String: String] = [:], failure: (String) -> UpdateError) async throws {
-        final class Tail: @unchecked Sendable { var lines: [String] = [] }
+        final class Tail: @unchecked Sendable { var lines: [String] = []; var errors: [String] = [] }
         let tail = Tail()
         let status = try await Shell.stream(exe, args, cwd: cwd, env: env) { line in
-            tail.lines.append(line); if tail.lines.count > 8 { tail.lines.removeFirst() }
+            // swift prints the whole compiler command line after the real diagnostics, so keep the
+            // "error:" lines apart and drop that command line from the tail.
+            let short = line.count > 300 ? String(line.prefix(300)) + "…" : line
+            if line.contains(" error: ") || line.hasPrefix("error: ") { if tail.errors.count < 6 { tail.errors.append(short) } }
+            if !line.contains(" -module-name ") && !line.hasPrefix("Command ") { tail.lines.append(short); if tail.lines.count > 8 { tail.lines.removeFirst() } }
             Task { @MainActor in Updater.shared.append(line) }
         }
-        if status != 0 { throw failure(tail.lines.suffix(4).joined(separator: " ")) }
+        if status != 0 {
+            let detail = tail.errors.isEmpty ? tail.lines.suffix(4) : tail.errors[...]
+            throw failure(detail.joined(separator: " "))
+        }
     }
 }

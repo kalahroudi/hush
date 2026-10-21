@@ -238,5 +238,8 @@ final class ShortcutTests: XCTestCase {
         XCTAssertTrue(entry.hasPrefix("[1970-01-01T00:00:00Z] FAILED during \"Building\""))
         XCTAssertTrue(entry.contains("Hush 0.1.3 (abc1234)")); XCTAssertEqual(entry.split(separator: "\n").count, 3, "multi-line detail stays on one line")
         XCTAssertTrue(build.report(step: "Building", app: "a", system: "b").contains("Step: Building"))
+        let url = build.issueURL(repo: "kalahroudi/hush", step: "Building", app: "a", system: "b", log: String(repeating: "x", count: 9000))
+        XCTAssertEqual(url?.host, "github.com"); XCTAssertEqual(url?.path, "/kalahroudi/hush/issues/new")
+        XCTAssertLessThan(url?.absoluteString.count ?? .max, 8000, "stays within GitHub's URL limit")
     }
 }
