@@ -26,15 +26,15 @@ public enum MCPProbe {
         let out = Collector(), err = Collector()
         outPipe.fileHandleForReading.readabilityHandler = { out.append($0.availableData) }
         errPipe.fileHandleForReading.readabilityHandler = { err.append($0.availableData) }   // drained so the server never blocks; shown if it hangs
+        let exited = DispatchSemaphore(value: 0)
+        p.terminationHandler = { _ in exited.signal() }   // not waitUntilExit(): off the main thread it can miss the exit and hang
         try p.run()
         inPipe.fileHandleForWriting.write(Data((lines.joined(separator: "\n") + "\n").utf8))
         try? inPipe.fileHandleForWriting.close()
 
         let finished: Bool = await withCheckedContinuation { cont in
-            let done = DispatchSemaphore(value: 0)
-            DispatchQueue.global().async { p.waitUntilExit(); done.signal() }
             DispatchQueue.global().async {
-                if done.wait(timeout: .now() + timeout) == .timedOut { p.terminate(); cont.resume(returning: false) } else { cont.resume(returning: true) }
+                if exited.wait(timeout: .now() + timeout) == .timedOut { p.terminate(); cont.resume(returning: false) } else { cont.resume(returning: true) }
             }
         }
         try? await Task.sleep(for: .milliseconds(50))   // let the last readability callback land
