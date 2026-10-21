@@ -234,16 +234,18 @@ public enum UpdateSwap {
 }
 
 /// A failed check or update, in words a person can act on. `detail` keeps the technical text for the log.
-public struct UpdateProblem: Equatable, Sendable {
+public struct AppProblem: Equatable, Sendable {
+    /// Which part of the app failed, e.g. "Update", "Telegram", "Agents". Shown in reports; never user content.
+    public var area = "Update"
     public var title: String
     public var hint: String
     public var detail: String
 
-    public init(title: String, hint: String, detail: String) { self.title = title; self.hint = hint; self.detail = detail }
+    public init(area: String = "Update", title: String, hint: String, detail: String) { self.area = area; self.title = title; self.hint = hint; self.detail = detail }
 
     static let untouched = "Your current Hush is untouched."
 
-    public static func from(_ error: Error) -> UpdateProblem {
+    public static func from(_ error: Error) -> AppProblem {
         let raw = String(describing: error) + " | " + error.localizedDescription
         if let e = error as? UpdateError {
             switch e {
@@ -273,40 +275,9 @@ public struct UpdateProblem: Equatable, Sendable {
         return .init(title: "Something went wrong while updating", hint: "\(untouched) Press Copy details and share it if it keeps happening.", detail: raw)
     }
 
-    private static func network(detail: String) -> UpdateProblem {
+    private static func network(detail: String) -> AppProblem {
         .init(title: "Couldn't reach GitHub", hint: "Check your internet connection and try again. \(untouched)", detail: detail)
     }
-
-    /// What goes in the log: when, where it stopped, the plain message, the technical text, and what was running.
-    public func logEntry(step: String, app: String, system: String, date: Date = .now) -> String {
-        let f = ISO8601DateFormatter()
-        return "[\(f.string(from: date))] FAILED during \"\(step)\": \(title)\n  detail: \(detail.replacingOccurrences(of: "\n", with: " ⏎ "))\n  app: \(app) · \(system)\n"
-    }
-
-    /// The same, for pasting into a bug report.
-    public func report(step: String, app: String, system: String) -> String {
-        "Hush update problem\n\(title)\n\(hint)\nStep: \(step)\nApp: \(app)\nSystem: \(system)\nDetail: \(detail)"
-    }
-
-    /// A prefilled "new issue" page. GitHub caps URL length, so only the end of the log goes in the link;
-    /// the app also copies the whole log so it can be pasted over it.
-    public func issueURL(repo: String, step: String, app: String, system: String, log: String, maxLog: Int = 3500) -> URL? {
-        let body = """
-        **\(title)**
-
-        - Step: \(step)
-        - App: \(app)
-        - System: \(system)
-
-        <details><summary>Update error log</summary>
-
-        ```
-        \(String(log.suffix(maxLog)))
-        ```
-        </details>
-        """
-        var c = URLComponents(string: "https://github.com/\(repo)/issues/new")
-        c?.queryItems = [.init(name: "title", value: "Update failed: \(title)"), .init(name: "body", value: body), .init(name: "labels", value: "update")]
-        return c?.url
-    }
 }
+
+public typealias UpdateProblem = AppProblem

@@ -82,19 +82,40 @@ struct TaskStrip: View {
     }
 }
 
+/// The buttons every failure offers: copy the scrubbed details, or open a prefilled GitHub issue.
+struct ProblemButtons: View {
+    let onCopy: () -> Void
+    let onReport: () -> Void
+    var file: URL?
+    var body: some View {
+        HStack(spacing: 8) {
+            Button("Report on GitHub", action: onReport).buttonStyle(Pill(kind: .primary))
+            Button("Copy details", action: onCopy).buttonStyle(Pill())
+            if let file { Button("Show file") { NSWorkspace.shared.activateFileViewerSelecting([file]) }.buttonStyle(Pill()) }
+        }
+    }
+}
+
 struct ToastView: View {
     let model = AppModel.shared
     var body: some View {
         if let t = model.toast {
-            Text(t.message).font(.system(size: 12.5)).lineLimit(3)
-                .padding(.horizontal, 14).padding(.vertical, 8)
-                .foregroundStyle(t.isError ? Theme.danger : Color.primary)
-                .background(.regularMaterial, in: Capsule())
-                .overlay(Capsule().stroke(Theme.hairline))
-                .shadow(color: .black.opacity(0.15), radius: 8, y: 2)
-                .padding(.bottom, 10)
-                .transition(.move(edge: .bottom).combined(with: .opacity))
-                .onTapGesture { model.toast = nil }
+            VStack(spacing: 8) {
+                Text(t.message).font(.system(size: 12.5)).lineLimit(3).multilineTextAlignment(.center)
+                    .foregroundStyle(t.isError ? Theme.danger : Color.primary)
+                    .onTapGesture { model.toast = nil }
+                if let p = t.problem {
+                    Text(p.hint).font(.system(size: 11.5)).foregroundStyle(.secondary).lineLimit(3).multilineTextAlignment(.center)
+                    ProblemButtons(onCopy: { model.copyDetails(p) }, onReport: { model.sendReport(p) })
+                }
+            }
+            .padding(.horizontal, 14).padding(.vertical, 8)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: t.problem == nil ? 18 : 12))
+            .overlay(RoundedRectangle(cornerRadius: t.problem == nil ? 18 : 12).stroke(Theme.hairline))
+            .shadow(color: .black.opacity(0.15), radius: 8, y: 2)
+            .padding(.bottom, 10)
+            .transition(.move(edge: .bottom).combined(with: .opacity))
+            
         }
     }
 }

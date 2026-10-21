@@ -35,11 +35,7 @@ struct UpdatesView: View {
                     VStack(alignment: .leading, spacing: 6) {
                         Label(m, systemImage: "exclamationmark.triangle.fill").font(.system(size: 12.5, weight: .semibold)).foregroundStyle(Theme.danger)
                         if let hint = u.problem?.hint { Text(hint).font(.system(size: 12.5)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true) }
-                        HStack(spacing: 8) {
-                            Button("Report on GitHub") { u.reportOnGitHub() }.buttonStyle(Pill(kind: .primary))
-                            Button("Copy error log") { Clipboard.copy(u.errorLogText); AppModel.shared.show("Error log copied") }.buttonStyle(Pill())
-                            Button("Show file") { NSWorkspace.shared.activateFileViewerSelecting([u.errorLogURL]) }.buttonStyle(Pill())
-                        }
+                        ProblemButtons(onCopy: u.copyDetails, onReport: u.reportOnGitHub, file: u.errorLogURL)
                     }.padding(10).frame(maxWidth: .infinity, alignment: .leading).background(Theme.dangerSoft, in: RoundedRectangle(cornerRadius: 9))
                 }
                 if let n = u.notice { Label(n, systemImage: "arrow.uturn.backward.circle").font(.system(size: 12.5)).foregroundStyle(Theme.warn) }

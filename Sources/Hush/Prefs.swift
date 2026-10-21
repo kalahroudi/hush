@@ -81,7 +81,7 @@ final class Prefs {
             if on { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() }
             launchAtLoginError = nil
         } catch {
-            launchAtLoginError = "Could not change Login Items: \(error.localizedDescription)"
+            launchAtLoginError = AppModel.shared.report(error, area: "Login Items").title
         }
         refreshLaunchAtLogin()
     }

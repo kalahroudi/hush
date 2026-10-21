@@ -123,7 +123,7 @@ struct AgentsView: View {
                 if install { try await AgentIntegrations.install(kind, serverPath: server) } else { try await AgentIntegrations.remove(kind) }
                 if install && kind.needsRestart { restartHint = kind }
                 AppModel.shared.show(install ? "Connected \(kind.name)" : "Disconnected \(kind.name)")
-            } catch { self.error = "\(kind.name): \(error.localizedDescription)" }
+            } catch { self.error = AppModel.shared.report(error, area: "Agents (\(kind.name))").title }
             scan(); busy = nil
         }
     }

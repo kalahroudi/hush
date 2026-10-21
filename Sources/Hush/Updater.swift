@@ -21,7 +21,7 @@ final class Updater {
     var progress: Double?
     var lastResult: String?
     /// The last failure in plain words, with a hint and the technical detail for the log.
-    var problem: UpdateProblem?
+    var problem: AppProblem?
     private var step = "Checking for updates"
     let build = BuildInfo.current
     private var nextAutoCheck = Date()
@@ -34,8 +34,6 @@ final class Updater {
     private var markerURL: URL { root.appendingPathComponent("update-ok") }
     private var pendingURL: URL { root.appendingPathComponent("update-pending.json") }
     private var logURL: URL { root.appendingPathComponent("update.log") }
-    /// Every failure ever, kept across runs (the update log is restarted by each update). Capped so it never grows.
-    var errorLogURL: URL { root.appendingPathComponent("update-errors.log") }
 
     var isBundled: Bool { Bundle.main.bundlePath.hasSuffix(".app") && build.commit != nil }
     var busy: Bool { if case .checking = phase { return true }; if case .working = phase { return true }; return false }
@@ -50,35 +48,19 @@ final class Updater {
         }
     }
 
-    private var appSummary: String { "Hush \(build.version) (\(build.shortCommit)), channel \(Prefs.shared.updateChannel.rawValue)" }
-    private var systemSummary: String { ProcessInfo.processInfo.operatingSystemVersionString }
-
-    /// Turns any error into a friendly problem, shows it, and writes it to both logs. Never throws.
+    /// Turns any error into a friendly problem, shows it, and writes it to the shared error log. Never throws.
     @discardableResult
-    private func fail(_ error: Error, quiet: Bool = false) -> UpdateProblem {
-        let p = UpdateProblem.from(error)
-        let entry = p.logEntry(step: step, app: appSummary, system: systemSummary)
+    private func fail(_ error: Error, quiet: Bool = false) -> AppProblem {
+        let p = AppProblem.from(error)
         append("✗ \(p.title). \(p.detail)")
-        if let old = try? String(contentsOf: errorLogURL, encoding: .utf8) {
-            try? (String((old + entry).suffix(64_000))).write(to: errorLogURL, atomically: true, encoding: .utf8)
-        } else { try? entry.write(to: errorLogURL, atomically: true, encoding: .utf8) }
+        AppModel.shared.record(p, step: step)
         if !quiet { problem = p; phase = .failed(p.title) }
         return p
     }
 
-    /// The whole persistent error log, or this run's report when nothing has been written yet.
-    var errorLogText: String { (try? String(contentsOf: errorLogURL, encoding: .utf8)).flatMap { $0.isEmpty ? nil : $0 } ?? problemReport }
-
-    /// Copies the full error log, then opens a prefilled GitHub issue (the link only has room for the end of it).
-    func reportOnGitHub() {
-        let log = errorLogText
-        Clipboard.copy(log)
-        guard let p = problem, let url = p.issueURL(repo: build.repo, step: step, app: appSummary, system: systemSummary, log: log) else { return }
-        NSWorkspace.shared.open(url)
-        AppModel.shared.show("Full error log copied. Paste it into the issue if it needs more detail.")
-    }
-
-    var problemReport: String { problem.map { $0.report(step: step, app: appSummary, system: systemSummary) } ?? "" }
+    func copyDetails() { if let p = problem { AppModel.shared.copyDetails(p, step: step) } }
+    func reportOnGitHub() { if let p = problem { AppModel.shared.sendReport(p, step: step) } }
+    var errorLogURL: URL { AppModel.shared.errorLog.url }
 
     private func beginRun(to target: String) {
         problem = nil
