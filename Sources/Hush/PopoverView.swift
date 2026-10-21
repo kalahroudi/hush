@@ -136,7 +136,6 @@ struct ThreadView: View {
         let id = model.session.openChat?.id ?? 0
         return Binding(get: { model.draftMessages[id] ?? "" }, set: { model.draftMessages[id] = $0.isEmpty ? nil : $0 })
     }
-    @FocusState private var focused: Bool
 
     var body: some View {
         let s = model.session
@@ -150,7 +149,7 @@ struct ThreadView: View {
                     let fav = prefs.isFavorite(id)
                     Button { prefs.toggleFavorite(id) } label: { Image(systemName: fav ? "star.fill" : "star") }
                         .buttonStyle(.plain).foregroundStyle(fav ? Theme.accent : .secondary)
-                        .help(fav ? "Favorite: banners are on" : "Make favorite to get banners").accessibilityLabel("Favorite")
+                        .help(fav ? "Favorite: banners and the menu bar count are on" : "Make favorite to get banners and a menu bar count").accessibilityLabel("Favorite")
                 }
             }
             ScrollViewReader { proxy in
@@ -167,20 +166,17 @@ struct ThreadView: View {
                 .onChange(of: s.lines.last?.id) { _, id in if let id { proxy.scrollTo(id, anchor: .bottom) } }
                 .onAppear { if let id = s.lines.last?.id { proxy.scrollTo(id, anchor: .bottom) } }
             }
-            HStack(spacing: 8) {
-                TextField("Message", text: draft).textFieldStyle(.plain).font(.system(size: 13.5)).focused($focused).onSubmit(send).disabled(sending)
-                Text("Return").font(.system(size: 10.5, design: .monospaced)).foregroundStyle(.secondary)
-            }.padding(.horizontal, 14).padding(.vertical, 11).overlay(alignment: .top) { Divider() }
+            ComposeField(text: draft, onSend: send)
+                .padding(.horizontal, 14).padding(.vertical, 10).overlay(alignment: .top) { Divider() }
         }
-        .onAppear { focused = true; NSApp.keyWindow?.makeFirstResponder(nil); focused = true }
     }
 
     private func send() {
-        guard let id = model.session.openChat?.id, !draft.wrappedValue.trimmingCharacters(in: .whitespaces).isEmpty else { return }
+        guard !sending, let id = model.session.openChat?.id, !draft.wrappedValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         let text = draft.wrappedValue; model.draftMessages[id] = nil; sending = true
         Task {
             do { try await model.session.send(text, to: id) } catch { model.draftMessages[id] = text; model.show(error.localizedDescription, error: true) }
-            sending = false; focused = true
+            sending = false
         }
     }
 }

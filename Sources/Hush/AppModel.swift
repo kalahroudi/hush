@@ -62,7 +62,15 @@ final class AppModel {
     var iconState: StatusIcon.State {
         guard session.phase == .ready else { return .busy }
         if !session.online { return .busy }
-        return session.unread > 0 ? .active : .idle
+        return menuBarCount > 0 ? .active : .idle
+    }
+
+    /// The number beside the menu bar glyph: unread messages in favorites, or in every unmuted chat when all chats are enabled.
+    /// Favorites are counted among the chats Hush has loaded (the most recent ones).
+    var menuBarCount: Int {
+        guard session.phase == .ready else { return 0 }
+        if settings.alertsForAllChats { return session.unread }
+        return session.chats.filter { settings.isFavorite($0.id) && !$0.muted }.reduce(0) { $0 + $1.unread }
     }
 
     func start() {
@@ -82,14 +90,44 @@ final class AppModel {
     // MARK: Banners (favorites only)
 
     private func banner(_ chat: ChatSummary, _ text: String) {
-        guard settings.banners, settings.isFavorite(chat.id), Bundle.main.bundleIdentifier != nil else { return }
-        let center = UNUserNotificationCenter.current()
-        center.requestAuthorization(options: [.alert]) { granted, _ in
-            guard granted else { return }
-            let c = UNMutableNotificationContent(); c.title = chat.title; c.body = text
-            c.userInfo = ["chat": String(chat.id)]
-            center.add(UNNotificationRequest(identifier: "chat-\(chat.id)", content: c, trigger: nil))   // same id: a burst shows one banner
+        guard BannerPolicy.shouldShow(enabled: settings.banners, favoritesOnly: !settings.alertsForAllChats, isFavorite: settings.isFavorite(chat.id)) else { return }
+        post(title: chat.title, body: text, chat: chat.id)
+    }
+
+    private func post(title: String, body: String, chat: Int64?) {
+        guard Bundle.main.bundleIdentifier != nil else { return }
+        let c = UNMutableNotificationContent(); c.title = title; c.body = body
+        if let chat { c.userInfo = ["chat": String(chat)] }
+        let id = chat.map { "chat-\($0)" } ?? "test"   // same id: a burst shows one banner
+        UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: id, content: c, trigger: nil)) { error in
+            if let error { Task { @MainActor in AppModel.shared.show("Banner failed: \(error.localizedDescription)", error: true) } }
         }
+    }
+
+    // MARK: Notification permission
+
+    var notificationAccess: UNAuthorizationStatus = .notDetermined
+
+    /// Asks macOS for permission (it prompts only once) and records the answer.
+    func requestNotificationAccess() {
+        guard Bundle.main.bundleIdentifier != nil else { return }
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert]) { _, _ in
+            Task { @MainActor in AppModel.shared.refreshNotificationAccess() }
+        }
+    }
+
+    func refreshNotificationAccess() {
+        guard Bundle.main.bundleIdentifier != nil else { return }
+        UNUserNotificationCenter.current().getNotificationSettings { s in
+            let status = s.authorizationStatus
+            Task { @MainActor in AppModel.shared.notificationAccess = status }
+        }
+    }
+
+    func sendTestBanner() {
+        if notificationAccess == .notDetermined { requestNotificationAccess() }
+        post(title: "Hush", body: "Notifications are working.", chat: nil)
+        show(notificationAccess == .denied ? "macOS is blocking Hush notifications. Allow them in System Settings." : "Test banner sent")
     }
 
     // MARK: Agents

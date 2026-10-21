@@ -17,7 +17,7 @@ let package = Package(
         .executableTarget(name: "Hush", dependencies: ["HushKit"]),
         // Model Context Protocol server (stdio) so agents can drive the app's capabilities.
         .executableTarget(name: "hush-mcp", dependencies: ["HushKit"]),
-        .testTarget(name: "HushKitTests", dependencies: ["HushKit"]),
+        .testTarget(name: "HushKitTests", dependencies: ["HushKit", "hush-mcp"]),   // hush-mcp is built so the tests can run the real server
     ],
     swiftLanguageModes: [.v5]
 )

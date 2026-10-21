@@ -183,4 +183,18 @@ final class ShortcutTests: XCTestCase {
         let data = try JSONEncoder().encode(Shortcut.default)
         XCTAssertEqual(try JSONDecoder().decode(Shortcut.self, from: data), .default)
     }
+
+    func testReturnKeySendsAndModifiedReturnStartsALine() {
+        XCTAssertEqual(ComposeKey.action(shift: false, option: false, control: false), .send)
+        XCTAssertEqual(ComposeKey.action(shift: true, option: false, control: false), .newline)
+        XCTAssertEqual(ComposeKey.action(shift: false, option: true, control: false), .newline)
+        XCTAssertEqual(ComposeKey.action(shift: false, option: false, control: true), .newline)
+    }
+
+    func testBannerPolicyDefaultsToFavorites() {
+        XCTAssertTrue(BannerPolicy.shouldShow(enabled: true, favoritesOnly: true, isFavorite: true))
+        XCTAssertFalse(BannerPolicy.shouldShow(enabled: true, favoritesOnly: true, isFavorite: false))
+        XCTAssertTrue(BannerPolicy.shouldShow(enabled: true, favoritesOnly: false, isFavorite: false), "all chats when enabled")
+        XCTAssertFalse(BannerPolicy.shouldShow(enabled: false, favoritesOnly: false, isFavorite: true), "off means off")
+    }
 }

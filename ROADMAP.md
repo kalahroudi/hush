@@ -13,8 +13,14 @@ Costs are estimates from how TDLib and AppKit behave, not measurements. Measure 
 | Reply | `sendMessage` with `reply_to: inputMessageReplyToMessage`; `Line.id` is already the message id; show the quoted line with one `getMessage` | about 1 KB | none | about 50 lines |
 | Edit | `editMessageText`, own messages only, Telegram allows 48 h; `updateMessageContent` already updates the line | none | none | about 40 lines |
 | Forward | `forwardMessages` with a chat picker that reuses the inbox list already in memory | none | none | about 60 lines |
+| Desktop window mode | Setting "Chat in a window". Menu bar item shows only the unread count; click opens a normal `NSWindow`, created on open and dropped on close like the Manager window. Two panes: left sidebar with filter tabs (All, Unread, Favorites) over the chat list and search, right pane is the open thread with the compose box. Reuses the inbox rows, thread and compose views from the popover. Right-click menu keeps Open, Settings, Quit. Shortcut and banner taps open the window instead of the popover | 4-8 MB while open (larger window surface, plus the list and one thread visible together); the list and thread data are already held in memory; nothing while closed | none (window frame and selected tab saved in UserDefaults) | about 180 lines |
+| Quick setup (bundled API key) | Ship a default Telegram API ID and hash so first run is "phone number, then code". "Use my own key" stays as the existing path. Needs a key registered at my.telegram.org under the project owner's account | none | none | about 60 lines |
+| Bot mode (limited) | Optional: a BotFather token. A bot cannot read your chats or send as you, only talk in chats with the bot, so it fits notifications and messaging yourself, not full access. Label it as limited in setup | about 1 MB (Bot API over HTTPS, no TDLib session) | none | about 150 lines |
 
 Notes:
 - Reply, edit and forward are user actions in the popover. If agents ever get them, each needs the same approval dialog as `hush_send`.
 - Photos are the only item with a real memory cost, so build them last and measure first.
 - Suggested order: links, reply, edit, forward, contacts, photos, link previews.
+- Desktop window mode reuses the popover's row, thread and compose views, so it adds a layout and a host, not a second UI. Off by default; the popover stays the default. Window size should have a minimum (about 560 x 420) so the sidebar never collapses.
+- Setup options keep the existing own-key flow; they only add easier paths. Item 6 of the original feedback list was blank and is still to be filled in.
+- Done: message box focus border, multi-line input (Shift+Return), banners and menu bar count for favorites by default with an "all chats" option, notification permission row, MCP protocol tests and a "Test connection" button.

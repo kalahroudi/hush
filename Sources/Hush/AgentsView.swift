@@ -13,6 +13,8 @@ struct AgentsView: View {
     @State private var restartHint: AgentKind?
     @State private var error: String?
     @State private var manual = false
+    @State private var testing = false
+    @State private var test: MCPProbe.Report?
     private let server = AgentIntegrations.serverPath()
     private var serverMissing: Bool { !FileManager.default.isExecutableFile(atPath: server) }
 
@@ -24,6 +26,7 @@ struct AgentsView: View {
                     Text("Agents can list your chats and read recent messages. Sending is possible too, but every message needs your approval in a dialog that shows the full text.").font(.system(size: 12.5)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer(minLength: 12)
+                Button(testing ? "Testing…" : "Test connection") { runTest() }.buttonStyle(Pill()).disabled(testing || serverMissing)
                 Button("Rescan") { scan() }.buttonStyle(Pill())
             }
             if serverMissing {
@@ -37,6 +40,10 @@ struct AgentsView: View {
                 }
                 if statuses.isEmpty { SkeletonList(rows: 3) }
             }.padding(.horizontal, 14).background(Theme.card, in: RoundedRectangle(cornerRadius: 10)).overlay(RoundedRectangle(cornerRadius: 10).stroke(Theme.hairline))
+            if let t = test {
+                Label(t.message, systemImage: t.ok ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                    .font(.system(size: 12.5)).foregroundStyle(t.ok ? Theme.ok : (t.level == .appProblem ? Theme.warn : Theme.danger)).textSelection(.enabled)
+            }
             if let e = error { Label(e, systemImage: "exclamationmark.triangle.fill").font(.system(size: 12.5)).foregroundStyle(Theme.danger) }
             if let k = restartHint { Label("Restart \(k.name) to load the new tools.", systemImage: "arrow.clockwise").font(.system(size: 12.5)).foregroundStyle(Theme.accent) }
             DisclosureGroup("Set up another agent manually", isExpanded: $manual) {
@@ -99,6 +106,12 @@ struct AgentsView: View {
         case .claudeDesktop: "bubble.left.and.text.bubble.right"
         case .cursor, .windsurf: "chevron.left.forwardslash.chevron.right"
         }
+    }
+
+    /// Runs the real server the way an agent would: handshake, tool list, and a status call through the app.
+    private func runTest() {
+        testing = true; test = nil
+        Task { test = await MCPProbe.run(server: server); testing = false }
     }
 
     private func scan() { statuses = AgentIntegrations.scan(serverPath: server) }

@@ -22,6 +22,8 @@ final class Prefs {
     var theme: ThemeChoice { didSet { d.set(theme.rawValue, forKey: "theme"); applyTheme() } }
     var showDockIcon: Bool { didSet { d.set(showDockIcon, forKey: "showDockIcon"); applyDockIcon() } }
     var banners: Bool { didSet { d.set(banners, forKey: "banners") } }
+    /// Off by default: only starred chats raise banners and count in the menu bar. On: every unmuted chat does.
+    var alertsForAllChats: Bool { didSet { d.set(alertsForAllChats, forKey: "alertsForAllChats") } }
     var agentsCanRead: Bool { didSet { d.set(agentsCanRead, forKey: "agentsCanRead") } }
     private(set) var favorites: Set<Int64>
     private(set) var shortcut: Shortcut?
@@ -38,6 +40,7 @@ final class Prefs {
         theme = ThemeChoice(rawValue: d.string(forKey: "theme") ?? "") ?? .system
         showDockIcon = d.bool(forKey: "showDockIcon")
         banners = d.bool(forKey: "banners")
+        alertsForAllChats = d.bool(forKey: "alertsForAllChats")
         agentsCanRead = d.bool(forKey: "agentsCanRead")
         favorites = Set((d.array(forKey: "favorites") as? [NSNumber] ?? []).map(\.int64Value))
         autoCheckUpdates = d.bool(forKey: "autoCheckUpdates")

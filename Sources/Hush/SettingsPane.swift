@@ -3,6 +3,7 @@
 import SwiftUI
 import AppKit
 import HushKit
+@preconcurrency import UserNotifications
 
 /// RULES: every tab has content (no empty pages); every control writes straight to Prefs and takes effect at once
 /// ("Settings save automatically", no Apply button); every option has a one-line explanation.
@@ -32,6 +33,7 @@ struct SettingsPane: View {
             Divider()
             HStack { Text("Hush \(BuildInfo.current.version) · github.com/kalahroudi/hush"); Spacer(); Text("Settings save automatically") }.font(.system(size: 12)).foregroundStyle(.secondary).padding(.horizontal, 22).padding(.vertical, 8)
         }
+        .onAppear { AppModel.shared.refreshNotificationAccess() }   // the user may have changed it in System Settings
     }
 
     private var general: some View {
@@ -43,8 +45,24 @@ struct SettingsPane: View {
                     SettingRow("Account", model.session.phase == .ready ? "Signed in as \(model.session.me)." : "Not signed in. Open Hush from the menu bar to sign in.") {
                         Button("Sign out") { model.session.logOut() }.buttonStyle(Pill()).disabled(model.session.phase != .ready)
                     }
-                    SettingRow("Banners for favorites", "Star a chat inside its conversation. Only starred, unmuted chats show a banner. Everything else stays silent; the menu bar dot is the only signal.") {
+                    SettingRow("Banners for favorites", "Star a chat inside its conversation. Starred, unmuted chats show a banner and add to the number beside the menu bar icon. Tap a banner to open that chat.") {
                         Toggle("", isOn: $p.banners).labelsHidden().toggleStyle(.switch).tint(Theme.accent)
+                    }
+                    SettingRow("Also for all chats", "Extend banners and the menu bar number to every unmuted chat, not just favorites.") {
+                        Toggle("", isOn: $p.alertsForAllChats).labelsHidden().toggleStyle(.switch).tint(Theme.accent)
+                    }
+                    SettingRow("macOS permission", notificationHelp(model.notificationAccess)) {
+                        VStack(alignment: .trailing, spacing: 6) {
+                            Badge(text: notificationLabel(model.notificationAccess), kind: model.notificationAccess == .authorized ? .ok : .warn)
+                            if model.notificationAccess == .denied {
+                                Button("Open Settings") { NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension")!) }.buttonStyle(Pill())
+                            } else if model.notificationAccess == .notDetermined {
+                                Button("Allow") { model.requestNotificationAccess() }.buttonStyle(Pill(kind: .primary))
+                            }
+                        }
+                    }
+                    SettingRow("Test banner", "Shows a sample banner now, so you can see that notifications work.") {
+                        Button("Send test") { model.sendTestBanner() }.buttonStyle(Pill())
                     }
                 }
                 SettingsGroup("Shortcut") {
@@ -63,6 +81,18 @@ struct SettingsPane: View {
                     SettingRow("Always light", "Telegram pushes updates, so Hush never polls. Messages are loaded when you open a chat and dropped when you close it.") { Badge(text: AppModel.shared.demo ? "no polling" : AppMemory.footprint, kind: .ok) }
                 }
             }.frame(maxWidth: .infinity)
+        }
+    }
+
+    private func notificationLabel(_ s: UNAuthorizationStatus) -> String {
+        switch s { case .authorized, .provisional, .ephemeral: "Allowed"; case .denied: "Blocked"; default: "Not asked" }
+    }
+
+    private func notificationHelp(_ s: UNAuthorizationStatus) -> String {
+        switch s {
+        case .denied: "macOS is blocking Hush. Open System Settings, Notifications, Hush, and allow banners."
+        case .notDetermined: "Hush has not asked macOS yet. Press Allow to get the permission prompt."
+        default: "macOS lets Hush show banners. Send a test to see one."
         }
     }
 

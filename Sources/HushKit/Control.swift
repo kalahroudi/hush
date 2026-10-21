@@ -95,12 +95,13 @@ public enum ControlClient {
     }
 
     /// Starts the app in the background (no window, no focus) and waits for its socket.
-    public static func launchAppIfNeeded(bundleId: String = "com.kalahroudi.hush", wait: TimeInterval = 20) -> Bool {
-        if isUp() { return true }
+    public static func launchAppIfNeeded(bundleId: String = "com.kalahroudi.hush", wait: TimeInterval = 20, socket: String = AppPaths().socketFile.path) -> Bool {
+        if isUp(socket: socket) { return true }
+        if ProcessInfo.processInfo.environment["HUSH_NO_LAUNCH"] != nil { return false }   // tests must never start the real app
         let p = Process(); p.executableURL = URL(fileURLWithPath: "/usr/bin/open"); p.arguments = ["-g", "-j", "-b", bundleId]
         try? p.run(); p.waitUntilExit()
         let end = Date().addingTimeInterval(wait)
-        while Date() < end { if isUp() { return true }; Thread.sleep(forTimeInterval: 0.4) }
+        while Date() < end { if isUp(socket: socket) { return true }; Thread.sleep(forTimeInterval: 0.4) }
         return false
     }
 }

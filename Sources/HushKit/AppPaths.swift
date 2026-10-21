@@ -7,8 +7,10 @@ import Foundation
 public struct AppPaths: Sendable {
     public let root: URL
 
+    /// `HUSH_HOME` moves everything (tests and the MCP probe use it); it must be short, a Unix socket path holds about 100 bytes.
     public init(root: URL? = nil) {
-        self.root = root ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        let override = ProcessInfo.processInfo.environment["HUSH_HOME"].flatMap { $0.isEmpty ? nil : URL(fileURLWithPath: $0, isDirectory: true) }
+        self.root = root ?? override ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("Hush", isDirectory: true)
     }
 

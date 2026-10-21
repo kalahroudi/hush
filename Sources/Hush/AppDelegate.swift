@@ -30,6 +30,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
         statusItem.button?.setAccessibilityLabel("Hush")
 
         UNUserNotificationCenter.current().delegate = self
+        model.requestNotificationAccess()   // asks once; without it macOS silently drops every banner
         model.start()
         HotKey.onPress = { [weak self] in self?.togglePopover() }
         Prefs.shared.setShortcut(Prefs.shared.shortcut)   // registers the saved (or default) shortcut
@@ -74,6 +75,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
         NSApp.activate(ignoringOtherApps: true)
         host.view.window?.makeKey()   // so the message box takes keystrokes
+    }
+
+    /// Show banners even while Hush is the active app (for example with the popover open); macOS hides them otherwise.
+    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification, withCompletionHandler done: @escaping (UNNotificationPresentationOptions) -> Void) {
+        done([.banner])
     }
 
     /// Tapping a banner opens that conversation.
@@ -135,7 +141,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
     /// Re-reads the menu bar glyph whenever unread count, connection or sign-in state changes. No timers.
     private func watchStatus() {
         statusItem.button?.image = StatusIcon.image(model.iconState)
-        withObservationTracking { _ = model.iconState } onChange: { [weak self] in
+        let n = model.menuBarCount
+        statusItem.button?.title = n > 0 ? " \(n > 99 ? "99+" : String(n))" : ""
+        statusItem.button?.imagePosition = n > 0 ? .imageLeading : .imageOnly
+        statusItem.length = n > 0 ? NSStatusItem.variableLength : NSStatusItem.squareLength
+        withObservationTracking { _ = model.iconState; _ = model.menuBarCount } onChange: { [weak self] in
             Task { @MainActor in self?.watchStatus() }
         }
     }
