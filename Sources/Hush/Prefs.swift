@@ -23,6 +23,8 @@ final class Prefs {
     var showDockIcon: Bool { didSet { d.set(showDockIcon, forKey: "showDockIcon"); applyDockIcon() } }
     var banners: Bool { didSet { d.set(banners, forKey: "banners") } }
     /// Off by default: only starred chats raise banners and count in the menu bar. On: every unmuted chat does.
+    /// Off by default: the menu bar item opens the popover. On: it opens a resizable chat window with the chat list beside the conversation.
+    var windowMode: Bool { didSet { d.set(windowMode, forKey: "windowMode"); (NSApp.delegate as? AppDelegate)?.windowModeChanged() } }
     var alertsForAllChats: Bool { didSet { d.set(alertsForAllChats, forKey: "alertsForAllChats") } }
     var agentsCanRead: Bool { didSet { d.set(agentsCanRead, forKey: "agentsCanRead") } }
     private(set) var favorites: Set<Int64>
@@ -40,6 +42,7 @@ final class Prefs {
         theme = ThemeChoice(rawValue: d.string(forKey: "theme") ?? "") ?? .system
         showDockIcon = d.bool(forKey: "showDockIcon")
         banners = d.bool(forKey: "banners")
+        windowMode = d.bool(forKey: "windowMode")
         alertsForAllChats = d.bool(forKey: "alertsForAllChats")
         agentsCanRead = d.bool(forKey: "agentsCanRead")
         favorites = Set((d.array(forKey: "favorites") as? [NSNumber] ?? []).map(\.int64Value))

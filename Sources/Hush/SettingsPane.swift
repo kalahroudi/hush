@@ -75,6 +75,9 @@ struct SettingsPane: View {
             VStack(spacing: 18) {
                 SettingsGroup("Appearance") {
                     SettingRow("Theme", "Applies to the popover and this window.") { Segmented(options: ThemeChoice.allCases.map { ($0, $0.label) }, selection: $p.theme) }
+                    SettingRow("Chat in a window", "The menu bar icon opens a resizable chat window with your chat list on the left, instead of the small popover. The menu bar keeps the unread number.") {
+                        Toggle("", isOn: $p.windowMode).labelsHidden().toggleStyle(.switch).tint(Theme.accent)
+                    }
                     SettingRow("Dock icon", "Off by default. Hush lives in the menu bar.") { Toggle("", isOn: $p.showDockIcon).labelsHidden().toggleStyle(.switch).tint(Theme.accent) }
                 }
                 SettingsGroup("Performance") {

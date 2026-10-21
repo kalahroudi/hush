@@ -131,6 +131,8 @@ struct RowStyle: ButtonStyle {
 struct ThreadView: View {
     let model = AppModel.shared
     let prefs = Prefs.shared
+    /// The popover needs a way back to the inbox; the desktop window keeps its chat list on screen instead.
+    var showBack = true
     @State private var sending = false
     private var draft: Binding<String> {
         let id = model.session.openChat?.id ?? 0
@@ -142,7 +144,7 @@ struct ThreadView: View {
         let chat = s.openChat
         VStack(spacing: 0) {
             Header {
-                Button { s.closeChat() } label: { Image(systemName: "chevron.left") }.buttonStyle(.plain).foregroundStyle(.secondary).help("Back").accessibilityLabel("Back")
+                if showBack { Button { s.closeChat() } label: { Image(systemName: "chevron.left") }.buttonStyle(.plain).foregroundStyle(.secondary).help("Back").accessibilityLabel("Back") }
                 Text(chat?.title ?? "").font(.system(size: 13.5, weight: .semibold)).lineLimit(1)
             } trailing: {
                 if let id = chat?.id {

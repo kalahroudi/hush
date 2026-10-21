@@ -31,7 +31,10 @@ enum SnapshotMode {
                 AnyView(SettingsPane(initialTab: agents ? .agents : .general).background(Theme.pane))
             }
         }
-        return [pop("inbox", Demo.inbox), pop("inbox", dark: true, Demo.inbox), pop("thread", Demo.thread), pop("thread", dark: true, Demo.thread),
+        func window(_ name: String, dark: Bool = false) -> Shot {
+            Shot(name: name + (dark ? "-dark" : ""), dark: dark, size: CGSize(width: 780, height: 520)) { Demo.thread(); return AnyView(ChatWindowView(openSettings: {})) }
+        }
+        return [window("window"), window("window", dark: true), pop("inbox", Demo.inbox), pop("inbox", dark: true, Demo.inbox), pop("thread", Demo.thread), pop("thread", dark: true, Demo.thread),
                 pop("setup", Demo.setup), settings("settings"), settings("settings", dark: true), settings("agents", agents: true)]
     }
 

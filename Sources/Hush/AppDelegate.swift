@@ -32,7 +32,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
         UNUserNotificationCenter.current().delegate = self
         model.requestNotificationAccess()   // asks once; without it macOS silently drops every banner
         model.start()
-        HotKey.onPress = { [weak self] in self?.togglePopover() }
+        HotKey.onPress = { [weak self] in self?.toggleMain() }
         Prefs.shared.setShortcut(Prefs.shared.shortcut)   // registers the saved (or default) shortcut
         watchStatus()
         startControl()
@@ -52,12 +52,41 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
     @objc private func statusClicked() {
         if NSApp.currentEvent?.type == .rightMouseUp {
             let m = NSMenu()
-            m.addItem(withTitle: "Open Hush", action: #selector(togglePopover), keyEquivalent: "").target = self
+            m.addItem(withTitle: "Open Hush", action: #selector(toggleMain), keyEquivalent: "").target = self
             m.addItem(withTitle: "Settings…", action: #selector(openSettings), keyEquivalent: ",").target = self
             m.addItem(.separator())
             m.addItem(withTitle: "Quit Hush", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
             statusItem.menu = m; statusItem.button?.performClick(nil); statusItem.menu = nil   // menu only for this click
-        } else { togglePopover() }
+        } else { toggleMain() }
+    }
+
+    /// Window mode applies once setup is done; first-run setup always uses the popover.
+    private var useWindow: Bool { Prefs.shared.windowMode && !model.needsSetup }
+    private var chatWindow: NSWindow?
+
+    @objc private func toggleMain() {
+        if !useWindow { togglePopover(); return }
+        if let w = chatWindow, w.isVisible, w.isKeyWindow { w.performClose(nil) } else { showChatWindow() }
+    }
+
+    func windowModeChanged() { if !Prefs.shared.windowMode { chatWindow?.performClose(nil) } }
+
+    func showChatWindow() {
+        popover?.performClose(nil)
+        if chatWindow == nil {
+            let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 780, height: 540),
+                             styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
+            w.title = "Hush"
+            w.isReleasedWhenClosed = false
+            w.minSize = NSSize(width: 560, height: 420)
+            w.setFrameAutosaveName("HushChat")
+            w.delegate = self
+            w.contentView = NSHostingView(rootView: ChatWindowView(openSettings: { [weak self] in self?.showSettings() }))
+            if !w.setFrameUsingName("HushChat") { w.center() }
+            chatWindow = w
+        }
+        chatWindow?.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
     }
 
     @objc private func togglePopover() {
@@ -87,7 +116,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
         let id = (response.notification.request.content.userInfo["chat"] as? String).flatMap { Int64($0) }
         Task { @MainActor in
             AppModel.shared.pendingChat = id
-            if self.popover?.isShown != true { self.togglePopover() }
+            if self.useWindow { self.showChatWindow() } else if self.popover?.isShown != true { self.togglePopover() }
         }
         done()
     }
@@ -122,14 +151,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
     }
 
     func windowWillClose(_ notification: Notification) {
-        guard (notification.object as? NSWindow) === settingsWindow else { return }
+        let closing = notification.object as? NSWindow
+        if closing === chatWindow {
+            chatWindow?.contentView = nil   // frees the SwiftUI tree and closes the open chat
+            chatWindow = nil
+            Task { try? await Task.sleep(for: .milliseconds(300)); malloc_zone_pressure_relief(nil, 0) }
+            return
+        }
+        guard closing === settingsWindow else { return }
         settingsWindow?.contentView = nil   // frees the SwiftUI tree
         settingsWindow = nil
     }
 
     // Clicking the Dock icon opens the popover.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        if popover?.isShown != true { togglePopover() }; return true
+        if useWindow { showChatWindow() } else if popover?.isShown != true { togglePopover() }; return true
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {

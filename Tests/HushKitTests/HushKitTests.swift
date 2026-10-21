@@ -197,4 +197,25 @@ final class ShortcutTests: XCTestCase {
         XCTAssertTrue(BannerPolicy.shouldShow(enabled: true, favoritesOnly: false, isFavorite: false), "all chats when enabled")
         XCTAssertFalse(BannerPolicy.shouldShow(enabled: false, favoritesOnly: false, isFavorite: true), "off means off")
     }
+
+    func testChatListFilterTabsSearchAndOlder() {
+        let now = Date()
+        let old = now.addingTimeInterval(-30 * 86_400)
+        let chats = [
+            ChatSummary(id: 1, title: "Mara", lastText: "dinner at 7", lastDate: now, unread: 2),
+            ChatSummary(id: 2, title: "Old friend", lastText: "hello", lastDate: old),
+            ChatSummary(id: 3, title: "Starred old", lastText: "x", lastDate: old),
+            ChatSummary(id: 4, title: "Muted team", lastText: "news", lastDate: now, unread: 5, muted: true),
+        ]
+        let fav: (Int64) -> Bool = { $0 == 3 }
+        let all = ChatListFilter.apply(chats, tab: .all, isFavorite: fav, now: now)
+        XCTAssertEqual(all.shown.map(\.id), [1, 3, 4]); XCTAssertEqual(all.hidden, 1, "quiet chats hide behind show older")
+        XCTAssertEqual(ChatListFilter.apply(chats, tab: .all, showOlder: true, isFavorite: fav, now: now).shown.count, 4)
+        XCTAssertEqual(ChatListFilter.apply(chats, tab: .unread, isFavorite: fav, now: now).shown.map(\.id), [1, 4])
+        XCTAssertEqual(ChatListFilter.apply(chats, tab: .favorites, isFavorite: fav, now: now).shown.map(\.id), [3])
+        let found = ChatListFilter.apply(chats, tab: .all, query: "old", isFavorite: fav, now: now)
+        XCTAssertEqual(found.shown.map(\.id), [2, 3], "search reaches old chats"); XCTAssertEqual(found.hidden, 0)
+        XCTAssertEqual(ChatListFilter.apply(chats, tab: .all, query: "DINNER", isFavorite: fav, now: now).shown.map(\.id), [1], "matches the last message, any case")
+        XCTAssertEqual(ChatListFilter.unreadBadge(chats), 1, "muted chats do not count")
+    }
 }
