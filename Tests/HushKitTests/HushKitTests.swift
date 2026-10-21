@@ -219,6 +219,27 @@ final class ShortcutTests: XCTestCase {
         XCTAssertEqual(ChatListFilter.unreadBadge(chats), 1, "muted chats do not count")
     }
 
+    func testReportsNeverContainPersonalDetails() throws {
+        let raw = "failed at /Users/mehdi/Library/Application Support/Hush/x for mehdi@example.com, +98 912 345 6789, bot 123456789:AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw, https://x.org/a?token=secret, key a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4"
+        let s = Privacy.scrub(raw, home: "/Users/mehdi", user: "mehdi", host: "mehdis-mac.local")
+        for leak in ["mehdi", "example.com", "912", "AAHdq", "secret", "a1b2c3d4"] { XCTAssertFalse(s.contains(leak), "leaked \(leak): \(s)") }
+        XCTAssertTrue(s.contains("Application Support/Hush/x"), "useful paths survive")
+
+        let p = AppProblem.from(TDError(code: 400, message: "Chat not found"), area: "Telegram")
+        XCTAssertEqual(p.area, "Telegram"); XCTAssertEqual(p.title, "Telegram couldn't do that")
+        XCTAssertEqual(AppProblem.from(URLError(.timedOut), area: "Agents").title, "Couldn't reach the internet")
+        struct Odd: Error {}
+        XCTAssertEqual(AppProblem.from(Odd(), area: "Login Items").title, "Something went wrong in Login Items")
+        let url = try XCTUnwrap(AppProblem(area: "Telegram", title: "t", hint: "h", detail: "d").issueURL(repo: "a/b", app: "Hush 1 (abc)", system: "macOS", log: "see /Users/bob/x"))
+        XCTAssertFalse(url.absoluteString.contains("bob")); XCTAssertTrue(url.absoluteString.contains("macOS"))
+
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("hush-log-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: dir) }
+        var log = ErrorLog(url: dir.appendingPathComponent("errors.log")); log.limit = 100
+        for i in 0..<20 { log.append("entry \(i) \(String(repeating: "x", count: 20))\n") }
+        XCTAssertLessThanOrEqual(log.text.count, 100); XCTAssertTrue(log.text.contains("entry 19"))
+    }
+
     func testUpdateProblemsAreFriendlyAndLogged() {
         let build = UpdateProblem.from(UpdateError.buildFailed("error: cannot find 'Foo' in scope"))
         XCTAssertEqual(build.title, "The new version couldn't be built")
@@ -235,8 +256,11 @@ final class ShortcutTests: XCTestCase {
         XCTAssertEqual(UpdateProblem.from(Odd()).title, "Something went wrong while updating", "unknown errors still get a plain message")
 
         let entry = build.logEntry(step: "Building", app: "Hush 0.1.3 (abc1234)", system: "macOS 15", date: Date(timeIntervalSince1970: 0))
-        XCTAssertTrue(entry.hasPrefix("[1970-01-01T00:00:00Z] FAILED during \"Building\""))
+        XCTAssertTrue(entry.hasPrefix("[1970-01-01T00:00:00Z] FAILED in Update during \"Building\""))
         XCTAssertTrue(entry.contains("Hush 0.1.3 (abc1234)")); XCTAssertEqual(entry.split(separator: "\n").count, 3, "multi-line detail stays on one line")
-        XCTAssertTrue(build.report(step: "Building", app: "a", system: "b").contains("Step: Building"))
+        XCTAssertTrue(build.report(step: "Building", system: "b").contains("Step: Building"))
+        let url = build.issueURL(repo: "kalahroudi/hush", step: "Building", app: "a", system: "b", log: String(repeating: "x ", count: 9000))
+        XCTAssertEqual(url?.host, "github.com"); XCTAssertEqual(url?.path, "/kalahroudi/hush/issues/new")
+        XCTAssertLessThan(url?.absoluteString.count ?? .max, 8000, "stays within GitHub's URL limit")
     }
 }

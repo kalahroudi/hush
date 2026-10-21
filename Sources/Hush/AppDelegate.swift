@@ -18,6 +18,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         if SnapshotMode.dir != nil { SnapshotMode.run(); return }
+        // An uncaught Objective-C exception ends the app; leave a scrubbed note so the next launch can be reported.
+        NSSetUncaughtExceptionHandler { e in
+            let p = AppProblem(area: "Crash", title: "Hush quit unexpectedly", hint: "", detail: "\(e.name.rawValue): \(e.reason ?? "") \(e.callStackSymbols.prefix(8).joined(separator: " | "))")
+            ErrorLog().append(p.logEntry(app: Diagnostics.app(.current), system: Diagnostics.system))
+        }
         Prefs.shared.applyTheme()
         Prefs.shared.applyDockIcon()
         NSApp.applicationIconImage = AppIcon.image(size: 512, padded: true)

@@ -41,7 +41,7 @@ enum AgentBridge {
                     model.log("read", c.title, "ok")
                     let f = ISO8601DateFormatter()
                     return ["ok": true, "chat": c.title, "messages": lines.map { ["time": f.string(from: $0.date), "sender": $0.sender, "text": $0.text] as JSON }]
-                } catch { return fail(error.localizedDescription) }
+                } catch { model.report(error, area: "Reading a chat for an agent"); return fail(error.localizedDescription) }
             }
         case "send":
             guard let text = req.str("text"), !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return fail("Missing required argument: text") }
@@ -54,7 +54,7 @@ enum AgentBridge {
                     return fail("The user denied this request. Do not retry.")
                 }
                 do { try await s.send(text, to: c.id); model.log("send", c.title, "sent"); return ["ok": true, "sent_to": c.title] }
-                catch { model.log("send", c.title, "failed"); return fail(error.localizedDescription) }
+                catch { model.log("send", c.title, "failed"); model.report(error, area: "Sending for an agent"); return fail(error.localizedDescription) }
             }
         default: return fail("Unknown operation.")
         }

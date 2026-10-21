@@ -24,6 +24,8 @@ public final class TelegramSession {
     public private(set) var me = ""
     public private(set) var online = true            // false while Telegram is unreachable
     public var error: String?
+    /// Called with every failed Telegram request, so the app can log and report it.
+    public var onError: (@MainActor (Error) -> Void)?
     /// Fired for every incoming message in a chat that is not muted and not currently open.
     public var onIncoming: ((ChatSummary, String) -> Void)?
 
@@ -75,7 +77,7 @@ public final class TelegramSession {
 
     private func call(_ req: JSON) {
         guard let c = client else { return }
-        Task { do { try await c.request(req) } catch { self.error = error.localizedDescription } }
+        Task { do { try await c.request(req) } catch { self.error = error.localizedDescription; self.onError?(error) } }
     }
 
     // MARK: Updates

@@ -177,7 +177,7 @@ struct ThreadView: View {
         guard !sending, let id = model.session.openChat?.id, !draft.wrappedValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         let text = draft.wrappedValue; model.draftMessages[id] = nil; sending = true
         Task {
-            do { try await model.session.send(text, to: id) } catch { model.draftMessages[id] = text; model.show(error.localizedDescription, error: true) }
+            do { try await model.session.send(text, to: id) } catch { model.draftMessages[id] = text; model.report(error, area: "Sending a message") }
             sending = false
         }
     }

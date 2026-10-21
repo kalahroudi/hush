@@ -16,6 +16,8 @@ struct Toast: Identifiable, Equatable {
     let id = UUID()
     let message: String
     var isError = false
+    /// Set for failures: the toast then offers to copy the details or report them.
+    var problem: AppProblem?
 }
 
 struct ActivityEntry: Identifiable {
@@ -78,6 +80,8 @@ final class AppModel {
         loadedOnce = true
         guard !needsSetup else { return }
         session.onIncoming = { [weak self] chat, text in self?.banner(chat, text) }
+        // Sign-in typos show inline; the log keeps every failure so a report has the full picture.
+        session.onError = { [weak self] e in self?.record(AppProblem.from(e, area: "Telegram")) }
         session.start()
     }
 
@@ -100,7 +104,7 @@ final class AppModel {
         if let chat { c.userInfo = ["chat": String(chat)] }
         let id = chat.map { "chat-\($0)" } ?? "test"   // same id: a burst shows one banner
         UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: id, content: c, trigger: nil)) { error in
-            if let error { Task { @MainActor in AppModel.shared.show("Banner failed: \(error.localizedDescription)", error: true) } }
+            if let error { Task { @MainActor in AppModel.shared.report(error, area: "Notifications") } }
         }
     }
 
@@ -151,7 +155,7 @@ final class AppModel {
                 try await work(log)
                 finish(id, .done); after?(true)
             } catch {
-                finish(id, .failed(error.localizedDescription)); after?(false)
+                finish(id, .failed(error.localizedDescription), error: error, area: title); after?(false)
             }
             setupState = SetupState.detect()
             try? await Task.sleep(for: .seconds(20))
@@ -159,15 +163,51 @@ final class AppModel {
         }
     }
 
-    private func finish(_ id: UUID, _ state: BackgroundTask.State) {
+    private func finish(_ id: UUID, _ state: BackgroundTask.State, error: Error? = nil, area: String = "Setup") {
         if let i = tasks.firstIndex(where: { $0.id == id }) { tasks[i].state = state }
-        if case .failed(let m) = state { show(m, error: true) } else if let t = tasks.first(where: { $0.id == id }) { show("\(t.title) finished") }
+        if case .failed(let m) = state { if let error { report(error, area: area) } else { show(m, error: true) } } else if let t = tasks.first(where: { $0.id == id }) { show("\(t.title) finished") }
     }
 
-    func show(_ message: String, error: Bool = false) {
-        let t = Toast(message: message, isError: error)
+    func show(_ message: String, error: Bool = false, problem: AppProblem? = nil) {
+        let t = Toast(message: message, isError: error, problem: problem)
         toast = t
-        Task { try? await Task.sleep(for: .seconds(error ? 8 : 3.5)); if toast == t { toast = nil } }
+        Task { try? await Task.sleep(for: .seconds(problem != nil ? 15 : error ? 8 : 3.5)); if toast == t { toast = nil } }
+    }
+
+    // MARK: Errors
+
+    /// One log for every failure in the app. Entries are scrubbed of personal details as they are written.
+    let errorLog = ErrorLog()
+    private var appSummary: String { Diagnostics.app(.current, channel: Prefs.shared.updateChannel.rawValue) }
+
+    /// Writes the failure to the error log without telling the person (the caller already shows it).
+    func record(_ problem: AppProblem, step: String? = nil) {
+        errorLog.append(problem.logEntry(step: step, app: appSummary, system: Diagnostics.system))
+    }
+
+    /// The way to handle any error: log it, and show a plain message with Copy details and Report buttons.
+    @discardableResult
+    func report(_ error: Error, area: String, step: String? = nil) -> AppProblem {
+        let p = AppProblem.from(error, area: area)
+        record(p, step: step)
+        show(p.title, error: true, problem: p)
+        return p
+    }
+
+    /// Puts the scrubbed error log on the clipboard (or this problem's report if nothing was logged yet).
+    func copyDetails(_ p: AppProblem, step: String? = nil) {
+        let log = errorLog.text
+        Clipboard.copy(log.isEmpty ? p.report(step: step, channel: Prefs.shared.updateChannel.rawValue) : Privacy.scrub(log))
+        show("Error details copied. Nothing personal is included.")
+    }
+
+    /// Opens a prefilled GitHub issue with the version, macOS version and the scrubbed error. The person reviews it and presses Submit.
+    func sendReport(_ p: AppProblem, step: String? = nil) {
+        let log = errorLog.text
+        Clipboard.copy(Privacy.scrub(log))
+        guard let url = p.issueURL(repo: BuildInfo.current.repo, step: step, app: appSummary, system: Diagnostics.system, log: Privacy.scrub(log)) else { return }
+        NSWorkspace.shared.open(url)
+        show("The full error log is copied. Paste it into the issue if more detail helps.")
     }
 
     // MARK: First-run setup
@@ -186,7 +226,7 @@ final class AppModel {
             return "The API ID is a number and the hash is 32 letters and digits. Copy both from my.telegram.org/apps."
         }
         draftKeyId = ""; draftKeyHash = ""
-        do { try keys.save() } catch { return "Could not save the key: \(error.localizedDescription)" }
+        do { try keys.save() } catch { return report(error, area: "Setup", step: "Saving the Telegram key").title }
         setupState = SetupState.detect()
         start()
         return nil
