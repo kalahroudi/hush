@@ -218,4 +218,25 @@ final class ShortcutTests: XCTestCase {
         XCTAssertEqual(ChatListFilter.apply(chats, tab: .all, query: "DINNER", isFavorite: fav, now: now).shown.map(\.id), [1], "matches the last message, any case")
         XCTAssertEqual(ChatListFilter.unreadBadge(chats), 1, "muted chats do not count")
     }
+
+    func testUpdateProblemsAreFriendlyAndLogged() {
+        let build = UpdateProblem.from(UpdateError.buildFailed("error: cannot find 'Foo' in scope"))
+        XCTAssertEqual(build.title, "The new version couldn't be built")
+        XCTAssertTrue(build.hint.contains("untouched")); XCTAssertTrue(build.detail.contains("Foo"), "technical text goes to the log")
+        XCTAssertFalse(build.title.contains("Foo"))
+
+        let offline = UpdateProblem.from(UpdateError.buildFailed("fatal: unable to access 'https://github.com/x.git/': Could not resolve host: github.com"))
+        XCTAssertEqual(offline.title, "Couldn't reach GitHub", "a failed clone is a network problem, not a build problem")
+        XCTAssertEqual(UpdateProblem.from(URLError(.notConnectedToInternet)).title, "Couldn't reach GitHub")
+        XCTAssertEqual(UpdateProblem.from(UpdateError.rateLimited).title, "GitHub is limiting requests")
+        XCTAssertTrue(UpdateProblem.from(ShellError.toolNotFound("git")).hint.contains("xcode-select"))
+        XCTAssertTrue(UpdateProblem.from(UpdateError.verifyFailed("It didn't start correctly.")).hint.contains("Nothing was replaced"))
+        struct Odd: Error {}
+        XCTAssertEqual(UpdateProblem.from(Odd()).title, "Something went wrong while updating", "unknown errors still get a plain message")
+
+        let entry = build.logEntry(step: "Building", app: "Hush 0.1.3 (abc1234)", system: "macOS 15", date: Date(timeIntervalSince1970: 0))
+        XCTAssertTrue(entry.hasPrefix("[1970-01-01T00:00:00Z] FAILED during \"Building\""))
+        XCTAssertTrue(entry.contains("Hush 0.1.3 (abc1234)")); XCTAssertEqual(entry.split(separator: "\n").count, 3, "multi-line detail stays on one line")
+        XCTAssertTrue(build.report(step: "Building", app: "a", system: "b").contains("Step: Building"))
+    }
 }

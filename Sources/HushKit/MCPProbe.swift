@@ -23,9 +23,9 @@ public enum MCPProbe {
         p.environment = ProcessInfo.processInfo.environment.merging(env) { _, new in new }
         let inPipe = Pipe(), outPipe = Pipe(), errPipe = Pipe()
         p.standardInput = inPipe; p.standardOutput = outPipe; p.standardError = errPipe
-        let out = Collector()
+        let out = Collector(), err = Collector()
         outPipe.fileHandleForReading.readabilityHandler = { out.append($0.availableData) }
-        errPipe.fileHandleForReading.readabilityHandler = { _ = $0.availableData }   // drain so the server never blocks on stderr
+        errPipe.fileHandleForReading.readabilityHandler = { err.append($0.availableData) }   // drained so the server never blocks; shown if it hangs
         try p.run()
         inPipe.fileHandleForWriting.write(Data((lines.joined(separator: "\n") + "\n").utf8))
         try? inPipe.fileHandleForWriting.close()
@@ -40,7 +40,10 @@ public enum MCPProbe {
         try? await Task.sleep(for: .milliseconds(50))   // let the last readability callback land
         outPipe.fileHandleForReading.readabilityHandler = nil
         errPipe.fileHandleForReading.readabilityHandler = nil
-        guard finished else { throw TDError(code: 0, message: "The MCP server did not answer in \(Int(timeout)) seconds.") }
+        guard finished else {
+            let said = String(err.string.suffix(300)).trimmingCharacters(in: .whitespacesAndNewlines)
+            throw TDError(code: 0, message: "The MCP server did not answer in \(Int(timeout)) seconds. It had printed: \(out.string.count) bytes, stderr: \(said.isEmpty ? "nothing" : said)")
+        }
 
         return try out.string.split(whereSeparator: \.isNewline).map { line in
             guard let obj = try? JSONSerialization.jsonObject(with: Data(line.utf8)) as? JSON else {

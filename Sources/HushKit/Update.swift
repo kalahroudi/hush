@@ -232,3 +232,59 @@ public enum UpdateSwap {
     exit 2
     """
 }
+
+/// A failed check or update, in words a person can act on. `detail` keeps the technical text for the log.
+public struct UpdateProblem: Equatable, Sendable {
+    public var title: String
+    public var hint: String
+    public var detail: String
+
+    public init(title: String, hint: String, detail: String) { self.title = title; self.hint = hint; self.detail = detail }
+
+    static let untouched = "Your current Hush is untouched."
+
+    public static func from(_ error: Error) -> UpdateProblem {
+        let raw = String(describing: error) + " | " + error.localizedDescription
+        if let e = error as? UpdateError {
+            switch e {
+            case .network(let m): return network(detail: m)
+            case .rateLimited: return .init(title: "GitHub is limiting requests", hint: "Wait a few minutes and try again.", detail: raw)
+            case .badResponse: return .init(title: "GitHub's answer couldn't be read", hint: "Try again later. \(untouched)", detail: raw)
+            case .missingTool(let t):
+                return .init(title: "\(t == "git" ? "Git" : "The Xcode command line tools") \(t == "git" ? "is" : "are") missing, and they are needed to build an update",
+                             hint: "Run xcode-select --install in Terminal, or switch the update channel to Releases, which needs no tools.", detail: raw)
+            case .notBundled: return .init(title: "Updates only work from the installed app", hint: "Install Hush into Applications and update from there.", detail: raw)
+            case .notWritable(let p): return .init(title: "Hush can't replace itself where it is", hint: "Move Hush to Applications or a folder you own, then try again.", detail: "No write access to \(p). \(raw)")
+            case .buildFailed(let m):
+                let lower = m.lowercased()
+                if ["could not resolve host", "unable to access", "network is unreachable", "timed out", "connection"].contains(where: lower.contains) { return network(detail: m) }
+                return .init(title: "The new version couldn't be built", hint: "\(untouched) Try again later, or switch the update channel to Releases for a prebuilt version.", detail: m)
+            case .verifyFailed(let m): return .init(title: "The new version didn't pass its safety checks", hint: "Nothing was replaced. \(untouched)", detail: m)
+            }
+        }
+        if let e = error as? URLError { return network(detail: "\(e.code.rawValue) \(e.localizedDescription)") }
+        if let e = error as? ShellError {
+            switch e {
+            case .toolNotFound(let t): return from(UpdateError.missingTool(t))
+            case .timedOut(let c): return .init(title: "A step took too long and was stopped", hint: "\(untouched) Try again.", detail: "\(c) timed out")
+            case .failed(_, _, let err): return from(UpdateError.buildFailed(err))
+            }
+        }
+        return .init(title: "Something went wrong while updating", hint: "\(untouched) Press Copy details and share it if it keeps happening.", detail: raw)
+    }
+
+    private static func network(detail: String) -> UpdateProblem {
+        .init(title: "Couldn't reach GitHub", hint: "Check your internet connection and try again. \(untouched)", detail: detail)
+    }
+
+    /// What goes in the log: when, where it stopped, the plain message, the technical text, and what was running.
+    public func logEntry(step: String, app: String, system: String, date: Date = .now) -> String {
+        let f = ISO8601DateFormatter()
+        return "[\(f.string(from: date))] FAILED during \"\(step)\": \(title)\n  detail: \(detail.replacingOccurrences(of: "\n", with: " ⏎ "))\n  app: \(app) · \(system)\n"
+    }
+
+    /// The same, for pasting into a bug report.
+    public func report(step: String, app: String, system: String) -> String {
+        "Hush update problem\n\(title)\n\(hint)\nStep: \(step)\nApp: \(app)\nSystem: \(system)\nDetail: \(detail)"
+    }
+}

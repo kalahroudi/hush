@@ -70,7 +70,9 @@ public final class ControlServer: @unchecked Sendable {
         t.name = "hush.control"; t.qualityOfService = .utility; t.start()
     }
 
-    public func stop() { if fd >= 0 { close(fd); fd = -1 }; unlink(path) }
+    /// shutdown() first: closing a listening socket does not wake a thread blocked in accept(), and that thread would
+    /// keep listening on a reused descriptor number.
+    public func stop() { if fd >= 0 { shutdown(fd, SHUT_RDWR); close(fd); fd = -1 }; unlink(path) }
 }
 
 public enum ControlClient {

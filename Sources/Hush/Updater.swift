@@ -20,6 +20,9 @@ final class Updater {
     /// 0...1 while a download runs, nil when the step has no measurable progress.
     var progress: Double?
     var lastResult: String?
+    /// The last failure in plain words, with a hint and the technical detail for the log.
+    var problem: UpdateProblem?
+    private var step = "Checking for updates"
     let build = BuildInfo.current
     private var nextAutoCheck = Date()
 
@@ -31,6 +34,8 @@ final class Updater {
     private var markerURL: URL { root.appendingPathComponent("update-ok") }
     private var pendingURL: URL { root.appendingPathComponent("update-pending.json") }
     private var logURL: URL { root.appendingPathComponent("update.log") }
+    /// Every failure ever, kept across runs (the update log is restarted by each update). Capped so it never grows.
+    var errorLogURL: URL { root.appendingPathComponent("update-errors.log") }
 
     var isBundled: Bool { Bundle.main.bundlePath.hasSuffix(".app") && build.commit != nil }
     var busy: Bool { if case .checking = phase { return true }; if case .working = phase { return true }; return false }
@@ -45,7 +50,26 @@ final class Updater {
         }
     }
 
+    private var appSummary: String { "Hush \(build.version) (\(build.shortCommit)), channel \(Prefs.shared.updateChannel.rawValue)" }
+    private var systemSummary: String { ProcessInfo.processInfo.operatingSystemVersionString }
+
+    /// Turns any error into a friendly problem, shows it, and writes it to both logs. Never throws.
+    @discardableResult
+    private func fail(_ error: Error, quiet: Bool = false) -> UpdateProblem {
+        let p = UpdateProblem.from(error)
+        let entry = p.logEntry(step: step, app: appSummary, system: systemSummary)
+        append("✗ \(p.title). \(p.detail)")
+        if let old = try? String(contentsOf: errorLogURL, encoding: .utf8) {
+            try? (String((old + entry).suffix(64_000))).write(to: errorLogURL, atomically: true, encoding: .utf8)
+        } else { try? entry.write(to: errorLogURL, atomically: true, encoding: .utf8) }
+        if !quiet { problem = p; phase = .failed(p.title) }
+        return p
+    }
+
+    var problemReport: String { problem.map { $0.report(step: step, app: appSummary, system: systemSummary) } ?? "" }
+
     private func beginRun(to target: String) {
+        problem = nil
         log = []
         try? FileManager.default.removeItem(at: logURL)
         append("Update \(build.version) · \(build.shortCommit) → \(target) at \(Date().formatted())")
@@ -76,7 +100,8 @@ final class Updater {
             } else {
                 let why = failure ?? "The new version didn't replace the old one."
                 notice = why
-                append("✗ \(why)")
+                step = "Restarting into the new version"
+                fail(UpdateError.verifyFailed(why), quiet: true)
                 swapLog.split(separator: "\n").forEach { append(String($0)) }
                 AppModel.shared.show(why, error: true)
             }
@@ -99,7 +124,7 @@ final class Updater {
     func check(silent: Bool = false) async {
         guard !busy else { return }
         guard build.cleanCommit != nil || build.version != "0.0.0" else { status = .notComparable("This is a development build."); return }
-        phase = .checking
+        phase = .checking; step = "Checking for updates"; problem = nil
         do {
             status = try await UpdateChecker().check(build, allowBranch: Prefs.shared.updateChannel == .main)
             lastChecked = Date()
@@ -107,7 +132,7 @@ final class Updater {
             if !silent, case .upToDate? = status { AppModel.shared.show("hush is up to date") }
         } catch {
             nextAutoCheck = Date().addingTimeInterval(3600)
-            phase = silent ? .idle : .failed(error.localizedDescription)
+            if silent { fail(error, quiet: true); phase = .idle } else { fail(error) }
         }
     }
 
@@ -116,34 +141,33 @@ final class Updater {
     func install() async {
         guard let info = available, !busy else { return }
         if let release = info.release { await installRelease(release); return }
-        beginRun(to: info.sha)
+        beginRun(to: info.sha); step = "Preparing"
         do {
             try preflight()
-            phase = .working("Getting the source")
+            phase = .working("Getting the source"); step = "Getting the source"
             let src = root.appendingPathComponent("source", isDirectory: true)
             let head = try await fetchSource(into: src, sha: info.sha)
 
-            phase = .working("Building. This takes a few minutes")
+            phase = .working("Building. This takes a few minutes"); step = "Building"
             let staging = root.appendingPathComponent("staging", isDirectory: true)
             try? FileManager.default.removeItem(at: staging)
             try await run("/usr/bin/nice", ["-n", "10", "/bin/bash", "scripts/bundle.sh", build.version], cwd: src, env: ["DIST_DIR": staging.path]) { .buildFailed($0) }
 
-            phase = .working("Checking the new build")
+            phase = .working("Checking the new build"); step = "Checking the new build"
             let staged = staging.appendingPathComponent("Hush.app")
             try await verify(staged, expect: head)
 
-            phase = .working("Restarting")
+            phase = .working("Restarting"); step = "Restarting"
             try startSwap(new: staged)
             NSApp.terminate(nil)
         } catch {
-            phase = .failed(error.localizedDescription)
-            append("✗ \(error.localizedDescription)")
+            fail(error)
         }
     }
 
     /// Prebuilt path: download the disk image, check its hash, unpack, verify, swap. No Xcode tools needed.
     private func installRelease(_ release: ReleaseInfo) async {
-        beginRun(to: release.tag)
+        beginRun(to: release.tag); step = "Preparing"
         let fm = FileManager.default
         let staging = root.appendingPathComponent("staging", isDirectory: true)
         let mount = staging.appendingPathComponent("mnt", isDirectory: true)
@@ -153,14 +177,14 @@ final class Updater {
             try? fm.removeItem(at: staging)
             try fm.createDirectory(at: staging, withIntermediateDirectories: true)
 
-            phase = .working("Downloading \(release.tag)")
+            phase = .working("Downloading \(release.tag)"); step = "Downloading"
             let dmg = staging.appendingPathComponent(release.dmgName)
             try await download(release.dmgURL, to: dmg)
 
-            phase = .working("Checking the download")
+            phase = .working("Checking the download"); step = "Checking the download"
             try await verifyChecksum(of: dmg, release: release)
 
-            phase = .working("Unpacking")
+            phase = .working("Unpacking"); step = "Unpacking"
             try fm.createDirectory(at: mount, withIntermediateDirectories: true)
             try await run("/usr/bin/hdiutil", ["attach", dmg.path, "-nobrowse", "-readonly", "-mountpoint", mount.path]) { .verifyFailed("Couldn't open the disk image. \($0)") }
             mounted = true
@@ -170,16 +194,15 @@ final class Updater {
             mounted = false
             try? fm.removeItem(at: dmg)
 
-            phase = .working("Checking the new build")
+            phase = .working("Checking the new build"); step = "Checking the new build"
             try await verify(staged, expect: nil)
 
-            phase = .working("Restarting")
+            phase = .working("Restarting"); step = "Restarting"
             try startSwap(new: staged)
             NSApp.terminate(nil)
         } catch {
             if mounted { _ = try? await run("/usr/bin/hdiutil", ["detach", mount.path, "-force", "-quiet"]) { .verifyFailed($0) } }
-            phase = .failed(error.localizedDescription)
-            append("✗ \(error.localizedDescription)")
+            fail(error)
         }
     }
 
