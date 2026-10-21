@@ -255,6 +255,26 @@ final class ShortcutTests: XCTestCase {
         XCTAssertEqual(ids(chats, showOlder: true).shown, [2, 4, 1, 3])
     }
 
+    func testPopoverFooterCountsMatchSharedFilter() {
+        // InboxView shows "\(shown.count) of \(chats.count)" while hidden > 0, else "\(shown.count) chats"; the old inline rule was hidden = total - visible.
+        let now = Date()
+        let old = now.addingTimeInterval(-30 * 86_400)
+        let chats = [
+            ChatSummary(id: 1, title: "a", lastText: "", lastDate: now),
+            ChatSummary(id: 2, title: "b", lastText: "", lastDate: old),                 // quiet, hidden
+            ChatSummary(id: 3, title: "c", lastText: "", lastDate: old),                 // old favorite, shown
+            ChatSummary(id: 4, title: "d", lastText: "", lastDate: old, unread: 1),      // old unread, shown
+            ChatSummary(id: 5, title: "e", lastText: "", lastDate: nil),                 // never active, hidden
+        ]
+        let fav: (Int64) -> Bool = { $0 == 3 }
+        let r = ChatListFilter.apply(chats, tab: .all, showOlder: false, isFavorite: fav, now: now)
+        XCTAssertEqual(r.shown.map(\.id), [3, 1, 4])
+        XCTAssertEqual(r.hidden, chats.count - r.shown.count, "footer 'N of M' and the 'Show N older' button agree")
+        XCTAssertEqual(r.hidden, 2, "the favorite is never counted as hidden")
+        let more = ChatListFilter.apply(chats, tab: .all, showOlder: true, isFavorite: fav, now: now)
+        XCTAssertEqual(more.shown.count, chats.count); XCTAssertEqual(more.hidden, 0, "'Show active only' state: footer drops to plain count")
+    }
+
     func testReportsNeverContainPersonalDetails() throws {
         let raw = "failed at /Users/mehdi/Library/Application Support/Hush/x for mehdi@example.com, +98 912 345 6789, bot 123456789:AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw, https://x.org/a?token=secret, key a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4"
         let s = Privacy.scrub(raw, home: "/Users/mehdi", user: "mehdi", host: "mehdis-mac.local")
