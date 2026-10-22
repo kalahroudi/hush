@@ -58,6 +58,13 @@ extension FavoritesStack {
     /// How many cards show at once: the top one and the edges of the next few behind it.
     public static let visibleDepth = 4
 
+    /// The selection after moving one card forward or back. It never wraps and always stays in bounds (0 for an empty stack).
+    public static func step(count: Int, selection: Int, forward: Bool) -> Int {
+        guard count > 0 else { return 0 }
+        let current = min(max(selection, 0), count - 1)
+        return min(max(current + (forward ? 1 : -1), 0), count - 1)
+    }
+
     /// Which cards are drawn and how deep each sits (0 = top). Cards before the selection are gone, cards beyond `visibleDepth` are not drawn.
     public static func layers(count: Int, selection: Int) -> [(index: Int, depth: Int)] {
         guard count > 0 else { return [] }
