@@ -159,6 +159,8 @@ struct ThreadView: View {
     /// Tab (false) and Shift+Tab (true) in the message box switch chats; nil leaves Tab alone.
     var onSwitch: ((Bool) -> Void)?
     @State private var sending = false
+    /// True while the end of the history is on screen, so a new message only scrolls a reader who is already at the bottom.
+    @State private var pinnedToBottom = true
     private var draft: Binding<String> {
         let id = model.session.openChat?.id ?? 0
         return Binding(get: { model.draftMessages[id] ?? "" }, set: { model.draftMessages[id] = $0.isEmpty ? nil : $0 })
@@ -188,9 +190,13 @@ struct ThreadView: View {
                              + Text(l.text).font(.system(size: 13.5)).foregroundColor(l.text.hasPrefix("[") && l.text.hasSuffix("]") ? .secondary : .primary))
                                 .textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading).id(l.id)
                         }
+                        // Lazy rows realize this only near the end, so it tells us whether the reader is at the bottom.
+                        Color.clear.frame(height: 1)
+                            .onAppear { pinnedToBottom = true }
+                            .onDisappear { pinnedToBottom = false }
                     }.padding(.horizontal, 14).padding(.vertical, 10)
                 }
-                .onChange(of: s.lines.last?.id) { _, id in if let id { proxy.scrollTo(id, anchor: .bottom) } }
+                .onChange(of: s.lines.last?.id) { _, id in if let id, pinnedToBottom { proxy.scrollTo(id, anchor: .bottom) } }
                 .onAppear { if let id = s.lines.last?.id { proxy.scrollTo(id, anchor: .bottom) } }
             }
             ComposeField(text: draft, onSend: send, onTab: onSwitch)
