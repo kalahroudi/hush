@@ -53,3 +53,15 @@ public enum FavoritesStack {
         }.map(\.card)
     }
 }
+
+extension FavoritesStack {
+    /// How many cards show at once: the top one and the edges of the next few behind it.
+    public static let visibleDepth = 4
+
+    /// Which cards are drawn and how deep each sits (0 = top). Cards before the selection are gone, cards beyond `visibleDepth` are not drawn.
+    public static func layers(count: Int, selection: Int) -> [(index: Int, depth: Int)] {
+        guard count > 0 else { return [] }
+        let top = min(max(selection, 0), count - 1)
+        return (top..<min(count, top + visibleDepth)).map { ($0, $0 - top) }
+    }
+}

@@ -228,6 +228,15 @@ final class ShortcutTests: XCTestCase {
         XCTAssertEqual(ChatListFilter.unreadBadge(chats), 1, "muted chats do not count")
     }
 
+    func testStackLayersShowTopCardAndPeekingEdges() {
+        XCTAssertTrue(FavoritesStack.layers(count: 0, selection: 0).isEmpty)
+        XCTAssertEqual(FavoritesStack.layers(count: 1, selection: 0).map(\.depth), [0])
+        XCTAssertEqual(FavoritesStack.layers(count: 6, selection: 0).map(\.index), [0, 1, 2, 3], "top card plus three peeking")
+        XCTAssertEqual(FavoritesStack.layers(count: 6, selection: 4).map(\.index), [4, 5], "cards already passed are not drawn")
+        XCTAssertEqual(FavoritesStack.layers(count: 3, selection: 9).map(\.index), [2], "selection stays in bounds")
+        XCTAssertEqual(FavoritesStack.layers(count: 3, selection: 1).map(\.depth), [0, 1])
+    }
+
     func testStackOpensEmptyWithoutCardsAndWithCardsOtherwise() {
         XCTAssertEqual(StackMode.opening(with: []), .empty)
         let card = StackCard(id: 1, title: "A", unread: 1, lines: [], sender: "", text: "hi", date: nil)

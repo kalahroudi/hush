@@ -25,7 +25,7 @@ struct PopoverView: View {
     }
 }
 
-private func timeText(_ d: Date?) -> String {
+func timeText(_ d: Date?) -> String {
     guard let d else { return "" }
     if Calendar.current.isDateInToday(d) { return d.formatted(date: .omitted, time: .shortened) }
     if Calendar.current.isDate(d, equalTo: .now, toGranularity: .weekOfYear) { return d.formatted(.dateTime.weekday(.abbreviated)) }
