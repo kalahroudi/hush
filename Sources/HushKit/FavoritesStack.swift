@@ -67,4 +67,42 @@ public enum FavoritesStack {
         if let selection, selection != id, rest.contains(where: { $0.id == selection }) { return (rest, selection, .cards) }
         return (rest, rest[min(i, rest.count - 1)].id, .cards)
     }
+
+    /// The stack after applying a fresh snapshot of the chats while it is open.
+    public struct Merged: Equatable, Sendable {
+        public var cards: [StackCard]
+        /// New chats held back until the reply ends.
+        public var queued: [StackCard]
+        /// The selected index after the merge; it keeps pointing at the same card.
+        public var selection: Int
+    }
+
+    /// Applies incoming changes (R14). A card already in the stack (or the queue) is updated in place: count, text and lines change, its position does not.
+    /// A favorite chat with unread messages that is new goes on top, newest first, unless `isReplying`; then it waits in `queued` and is added by the next merge made with `isReplying: false`.
+    /// Chats that are not unread favorites are ignored here; removing cards is `remove`'s job. The selection follows the card it was on, so the card being replied to never changes under the user.
+    public static func merge(cards: [StackCard], queued: [StackCard] = [], selection: Int, chats: [ChatSummary], isFavorite: (Int64) -> Bool, lines: (Int64) -> [Line], isReplying: Bool) -> Merged {
+        var cards = cards, queued = queued
+        let selectedId = cards.indices.contains(selection) ? cards[selection].id : nil
+        var fresh: [ChatSummary] = []
+        for chat in chats where chat.unread > 0 && isFavorite(chat.id) {
+            if let i = cards.firstIndex(where: { $0.id == chat.id }), let card = build(chats: [chat], isFavorite: { _ in true }, lines: lines).first {
+                cards[i] = card
+            } else if let i = queued.firstIndex(where: { $0.id == chat.id }), let card = build(chats: [chat], isFavorite: { _ in true }, lines: lines).first {
+                queued[i] = card
+            } else {
+                fresh.append(chat)
+            }
+        }
+        var incoming = build(chats: fresh, isFavorite: { _ in true }, lines: lines)
+        if isReplying {
+            queued += incoming
+            return Merged(cards: cards, queued: queued, selection: selection)
+        }
+        incoming = (queued + incoming).enumerated()
+            .sorted { ($0.element.date ?? .distantPast, $1.offset) > ($1.element.date ?? .distantPast, $0.offset) }
+            .map(\.element)
+        cards = incoming + cards
+        let kept = selectedId.flatMap { id in cards.firstIndex { $0.id == id } } ?? selection
+        return Merged(cards: cards, queued: [], selection: cards.isEmpty ? 0 : min(kept, cards.count - 1))
+    }
 }
