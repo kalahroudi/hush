@@ -78,3 +78,9 @@ public struct ShortcutStore {
         Shortcut.conflict(new, other) ? "\(new?.display ?? "") is already used to \(otherName). Pick a different shortcut." : nil
     }
 }
+
+/// The global shortcuts the app registers. Raw values are the Carbon hotkey ids, so `open` must stay 1.
+public enum HotKeySlot: UInt32, CaseIterable, Sendable {
+    case open = 1
+    case stack = 2
+}

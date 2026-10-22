@@ -5,27 +5,34 @@ import AppKit
 import Carbon.HIToolbox
 import HushKit
 
-/// Registers the global shortcut with Carbon's RegisterEventHotKey, which needs no accessibility permission.
+/// Registers global shortcuts with Carbon's RegisterEventHotKey, which needs no accessibility permission.
+/// Each `HotKeySlot` owns one registration and one press callback.
 @MainActor
 enum HotKey {
-    private static var ref: EventHotKeyRef?
+    private static var refs: [HotKeySlot: EventHotKeyRef] = [:]
     private static var handler: EventHandlerRef?
-    static var onPress: (() -> Void)?
+    static var onPress: [HotKeySlot: () -> Void] = [:]
 
     /// Returns an error message when the shortcut is already taken by another app or the system.
     @discardableResult
-    static func apply(_ s: Shortcut?) -> String? {
-        if let r = ref { UnregisterEventHotKey(r); ref = nil }
+    static func apply(_ s: Shortcut?, slot: HotKeySlot = .open) -> String? {
+        if let r = refs.removeValue(forKey: slot) { UnregisterEventHotKey(r) }
         guard let s, s.isValid else { return nil }
         if handler == nil {
             var spec = EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed))
-            InstallEventHandler(GetApplicationEventTarget(), { _, _, _ in
-                DispatchQueue.main.async { MainActor.assumeIsolated { HotKey.onPress?() } }
+            InstallEventHandler(GetApplicationEventTarget(), { _, event, _ in
+                var id = EventHotKeyID()
+                guard let event, GetEventParameter(event, EventParamName(kEventParamDirectObject), EventParamType(typeEventHotKeyID),
+                                                   nil, MemoryLayout<EventHotKeyID>.size, nil, &id) == noErr,
+                      let slot = HotKeySlot(rawValue: id.id) else { return noErr }
+                DispatchQueue.main.async { MainActor.assumeIsolated { HotKey.onPress[slot]?() } }
                 return noErr
             }, 1, &spec, nil, &handler)
         }
-        let id = EventHotKeyID(signature: OSType(0x48555348), id: 1)   // 'HUSH'
+        let id = EventHotKeyID(signature: OSType(0x48555348), id: slot.rawValue)   // 'HUSH'
+        var ref: EventHotKeyRef?
         let status = RegisterEventHotKey(s.keyCode, s.modifiers, id, GetApplicationEventTarget(), 0, &ref)
+        if status == noErr, let ref { refs[slot] = ref }
         return status == noErr ? nil : "\(s.display) is already used by another app. Pick a different shortcut."
     }
 }
