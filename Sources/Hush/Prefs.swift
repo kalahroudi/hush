@@ -30,6 +30,8 @@ final class Prefs {
     private(set) var favorites: Set<Int64>
     private(set) var shortcut: Shortcut?
     private(set) var shortcutError: String?
+    private(set) var stackShortcut: Shortcut?
+    private(set) var stackShortcutError: String?
     var updateChannel: UpdateChannel { didSet { d.set(updateChannel.rawValue, forKey: "updateChannel") } }
     var autoCheckUpdates: Bool { didSet { d.set(autoCheckUpdates, forKey: "autoCheckUpdates") } }
 
@@ -57,13 +59,30 @@ final class Prefs {
         // First run gets the default shortcut. After that, "None" is a valid choice and is remembered.
         if d.object(forKey: "shortcutSet") == nil { shortcut = .default }
         else { shortcut = d.data(forKey: "shortcut").flatMap { try? JSONDecoder().decode(Shortcut.self, from: $0) } }
+        if d.object(forKey: "stackShortcutSet") == nil { stackShortcut = .stackDefault }
+        else { stackShortcut = d.data(forKey: "stackShortcut").flatMap { try? JSONDecoder().decode(Shortcut.self, from: $0) } }
     }
 
     func setShortcut(_ s: Shortcut?) {
+        if Shortcut.conflict(s, stackShortcut) {
+            shortcutError = "\(s?.display ?? "") is already used to open the stack. Pick a different shortcut."
+            return
+        }
         shortcut = s
         d.set(true, forKey: "shortcutSet")
         d.set(s.flatMap { try? JSONEncoder().encode($0) }, forKey: "shortcut")
         shortcutError = HotKey.apply(s)
+    }
+
+    func setStackShortcut(_ s: Shortcut?) {
+        if Shortcut.conflict(s, shortcut) {
+            stackShortcutError = "\(s?.display ?? "") is already used to open Hush. Pick a different shortcut."
+            return
+        }
+        stackShortcut = s
+        d.set(true, forKey: "stackShortcutSet")
+        d.set(s.flatMap { try? JSONEncoder().encode($0) }, forKey: "stackShortcut")
+        stackShortcutError = HotKey.apply(s, slot: .stack)
     }
 
     func isFavorite(_ id: Int64) -> Bool { favorites.contains(id) }

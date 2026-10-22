@@ -67,6 +67,7 @@ struct SettingsPane: View {
                 }
                 SettingsGroup("Shortcut") {
                     SettingRow("Open Hush", "Show or hide the popover from anywhere. Click the box, then press the keys.", error: prefs.shortcutError) { ShortcutRecorder() }
+                    SettingRow("Stack", "Show unread messages from your favorite chats as a stack of cards. Click the box, then press the keys.", error: prefs.stackShortcutError) { ShortcutRecorder(slot: .stack) }
                 }
                 SettingsGroup("Startup") {
                     SettingRow("Launch at login", "Adds Hush to Login Items. Turn it off any time.", error: prefs.launchAtLoginError) { Toggle("", isOn: Binding(get: { prefs.launchAtLogin }, set: { prefs.setLaunchAtLogin($0) })).labelsHidden().toggleStyle(.switch).tint(Theme.accent) }

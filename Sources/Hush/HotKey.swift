@@ -40,20 +40,25 @@ enum HotKey {
 /// Click, press the new combination, done. Esc cancels. Needs at least one of ⌘ ⌃ ⌥.
 struct ShortcutRecorder: View {
     let prefs = Prefs.shared
+    var slot: HotKeySlot = .open
     @State private var recording = false
     @State private var monitor: Any?
     @State private var hint: String?
 
+    private var current: Shortcut? { slot == .open ? prefs.shortcut : prefs.stackShortcut }
+    private var fallback: Shortcut { slot == .open ? .default : .stackDefault }
+    private func set(_ s: Shortcut?) { if slot == .open { prefs.setShortcut(s) } else { prefs.setStackShortcut(s) } }
+
     var body: some View {
         HStack(spacing: 8) {
             Button { recording ? stop() : start() } label: {
-                Text(recording ? "Press keys…" : (prefs.shortcut?.display ?? "None"))
+                Text(recording ? "Press keys…" : (current?.display ?? "None"))
                     .font(.system(size: 12.5, weight: .medium, design: .monospaced)).frame(minWidth: 88)
             }.buttonStyle(Pill(kind: recording ? .primary : .plain))
             if !recording {
                 Menu {
-                    Button("Reset to \(Shortcut.default.display)") { prefs.setShortcut(.default) }.disabled(prefs.shortcut == .default)
-                    Button("Clear shortcut") { prefs.setShortcut(nil) }.disabled(prefs.shortcut == nil)
+                    Button("Reset to \(fallback.display)") { set(fallback) }.disabled(current == fallback)
+                    Button("Clear shortcut") { set(nil) }.disabled(current == nil)
                 } label: { Image(systemName: "ellipsis.circle") }
                     .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize().help("Reset or clear")
             }
@@ -69,7 +74,7 @@ struct ShortcutRecorder: View {
             if e.keyCode == 53 { stop(); return nil }   // Esc
             let s = Shortcut(keyCode: UInt32(e.keyCode), cocoaFlags: e.modifierFlags.rawValue)
             guard s.isValid else { NSSound.beep(); return nil }
-            prefs.setShortcut(s); stop(); return nil
+            set(s); stop(); return nil
         }
     }
 
