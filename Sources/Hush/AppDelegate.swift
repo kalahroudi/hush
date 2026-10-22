@@ -37,8 +37,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
         UNUserNotificationCenter.current().delegate = self
         model.requestNotificationAccess()   // asks once; without it macOS silently drops every banner
         model.start()
-        HotKey.onPress = { [weak self] in self?.toggleMain() }
-        Prefs.shared.setShortcut(Prefs.shared.shortcut)   // registers the saved (or default) shortcut
+        HotKey.onPress[.open] = { [weak self] in self?.toggleMain() }
+        HotKey.onPress[.stack] = { [weak self] in self?.toggleStack() }
+        Prefs.shared.setShortcut(Prefs.shared.shortcut)   // registers the saved (or default) shortcuts
+        Prefs.shared.setStackShortcut(Prefs.shared.stackShortcut)
         watchStatus()
         startControl()
         Updater.shared.confirmLaunch()                                   // tells a pending swap script "the new version started"
@@ -72,6 +74,46 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
     @objc private func toggleMain() {
         if !useWindow { togglePopover(); return }
         if let w = chatWindow, w.isVisible, w.isKeyWindow { w.performClose(nil) } else { showChatWindow() }
+    }
+
+    // MARK: Favorites stack
+
+    private var stackWindow: NSPanel?
+    private var previousApp: NSRunningApplication?
+
+    /// Opens the stack, or closes it when it is already open. A stack with nothing to show opens in its empty state.
+    func toggleStack() {
+        if stackWindow != nil { closeStack(); return }
+        previousApp = NSWorkspace.shared.frontmostApplication
+        Task {
+            if !model.demo { await model.loadStack() }
+            showStack()
+        }
+    }
+
+    private func showStack() {
+        guard stackWindow == nil else { return }
+        let w = StackPanel(contentRect: NSRect(x: 0, y: 0, width: 460, height: 360),
+                           styleMask: [.borderless], backing: .buffered, defer: false)
+        w.isReleasedWhenClosed = false
+        w.level = .floating
+        w.isOpaque = false
+        w.backgroundColor = .clear
+        w.hasShadow = false
+        w.isMovableByWindowBackground = true
+        w.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        w.delegate = self
+        w.contentView = NSHostingView(rootView: StackView(close: { [weak self] in self?.closeStack() }))
+        let screen = NSScreen.screens.first { NSMouseInRect(NSEvent.mouseLocation, $0.frame, false) } ?? NSScreen.main
+        if let f = screen?.visibleFrame { w.setFrameOrigin(NSPoint(x: f.midX - w.frame.width / 2, y: f.midY - w.frame.height / 2)) } else { w.center() }
+        stackWindow = w
+        model.stackOpen = true
+        NSApp.activate(ignoringOtherApps: true)
+        w.makeKeyAndOrderFront(nil)
+    }
+
+    func closeStack() {
+        stackWindow?.close()
     }
 
     func windowModeChanged() { if !Prefs.shared.windowMode { chatWindow?.performClose(nil) } }
@@ -161,6 +203,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
             chatWindow?.contentView = nil   // frees the SwiftUI tree and closes the open chat
             chatWindow = nil
             Task { try? await Task.sleep(for: .milliseconds(300)); malloc_zone_pressure_relief(nil, 0) }
+            return
+        }
+        if closing === stackWindow {
+            stackWindow?.contentView = nil
+            stackWindow = nil
+            model.stackOpen = false
+            model.stackReplying = false
+            previousApp?.activate()   // hand the keyboard back to whatever the user was in
+            previousApp = nil
             return
         }
         guard closing === settingsWindow else { return }

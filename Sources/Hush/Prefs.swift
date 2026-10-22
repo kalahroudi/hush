@@ -77,7 +77,7 @@ final class Prefs {
         if let why = ShortcutStore.rejection(of: s, against: shortcut, otherName: "open Hush") { stackShortcutError = why; return }
         stackShortcut = s
         stackStore.save(s)
-        stackShortcutError = nil
+        stackShortcutError = HotKey.apply(s, slot: .stack)
     }
 
     func isFavorite(_ id: Int64) -> Bool { favorites.contains(id) }

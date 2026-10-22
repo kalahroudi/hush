@@ -53,6 +53,19 @@ final class AppModel {
     var draftPassword = ""
     var draftMessages: [Int64: String] = [:]
 
+    /// The favorites stack: one card per favorite chat with unread messages, newest activity first.
+    var stackCards: [StackCard] = []
+    var stackSelection = 0
+    var stackMode = StackMode.empty
+    /// True while the reply field on the top card has focus or a send is running.
+    var stackReplying = false {
+        didSet { if !stackReplying { flushStackQueue() } }
+    }
+    /// True while the stack window is on screen; incoming messages only update the stack then.
+    var stackOpen = false
+    /// New favorite chats that arrived during a reply. They join the stack when the reply ends.
+    private var stackQueued: [StackCard] = []
+
     private var popoverVisible = false
 
     var settings: Prefs { Prefs.shared }
@@ -81,6 +94,7 @@ final class AppModel {
         guard !needsSetup else { return }
         session.onIncoming = { [weak self] chat, text in self?.banner(chat, text) }
         // Sign-in typos show inline; the log keeps every failure so a report has the full picture.
+        session.onIncomingLine = { [weak self] chat, line in self?.stackIncoming(chat, line) }
         session.onError = { [weak self] e in self?.record(AppProblem.from(e, area: "Telegram")) }
         session.start()
     }
@@ -89,6 +103,74 @@ final class AppModel {
         popoverVisible = v
         if session.phase == .ready { draftCode = ""; draftPassword = ""; draftPhone = "" }   // sign-in finished: forget what was typed
         if v, !demo { setupState = SetupState.detect(); if !needsSetup, session.phase == .stopped { start() } }
+    }
+
+    // MARK: Favorites stack
+
+    /// Builds the stack from the chats Hush has loaded. Unread lines are read from history, which marks nothing read and opens no chat.
+    /// A chat whose history cannot be read still gets a card from its last message, and the failure goes to the error log.
+    func loadStack() async {
+        let chats = session.chats.filter { $0.unread > 0 && settings.isFavorite($0.id) }
+        var fetched: [Int64: [Line]] = [:]
+        for chat in chats {
+            do { fetched[chat.id] = try await session.unreadLines(chatId: chat.id, count: chat.unread) }
+            catch { record(AppProblem.from(error, area: "Telegram")) }
+        }
+        stackCards = FavoritesStack.build(chats: session.chats, isFavorite: { self.settings.isFavorite($0) }, lines: { fetched[$0] ?? [] })
+        stackSelection = 0
+        stackQueued = []
+        stackMode = StackMode.opening(with: stackCards)
+    }
+
+    /// Updates the open stack with a message that just arrived in a favorite chat.
+    private func stackIncoming(_ chat: ChatSummary, _ line: Line) {
+        guard stackOpen, settings.isFavorite(chat.id) else { return }
+        let r = FavoritesStack.merge(cards: stackCards, queued: stackQueued, selection: stackSelection, chat: chat, line: line, isReplying: stackReplying)
+        applyStack(r)
+    }
+
+    private func flushStackQueue() {
+        guard stackOpen else { return }
+        applyStack(FavoritesStack.flush(cards: stackCards, queued: stackQueued, selection: stackSelection))
+    }
+
+    private func applyStack(_ r: (cards: [StackCard], queued: [StackCard], selection: Int)) {
+        stackCards = r.cards; stackQueued = r.queued; stackSelection = r.selection
+        if !stackCards.isEmpty { stackMode = .cards }
+    }
+
+    /// Sends the draft typed on the top card to that card's chat, then marks the chat read and drops its card.
+    /// The draft comes back and the card stays if sending fails.
+    func sendStackReply() {
+        guard let id = FavoritesStack.replyTarget(cards: stackCards, selection: stackSelection),
+              let text = draftMessages[id], !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        draftMessages[id] = nil
+        Task {
+            do { try await session.send(text, to: id) }
+            catch { draftMessages[id] = text; report(error, area: "Sending a message"); return }
+            await finishStackCard(id)
+        }
+    }
+
+    /// Brings the next or previous card to the top. It does not wrap, and it leaves the card being replied to alone.
+    func stepStack(forward: Bool) {
+        guard stackMode == .cards, !stackReplying else { return }
+        stackSelection = FavoritesStack.step(count: stackCards.count, selection: stackSelection, forward: forward)
+    }
+
+    /// "Done": marks the top card's chat read without replying and drops its card.
+    func markStackDone() {
+        guard let id = FavoritesStack.replyTarget(cards: stackCards, selection: stackSelection) else { return }
+        Task { await finishStackCard(id) }
+    }
+
+    /// Marks the chat read through the same path the main window uses, then removes its card. A failed mark keeps the card.
+    private func finishStackCard(_ id: Int64) async {
+        do { try await session.markRead(chatId: id) }
+        catch { report(error, area: "Marking a chat read"); return }
+        let r = FavoritesStack.dropCard(id: id, from: stackCards, selection: stackSelection)
+        stackCards = r.cards; stackSelection = r.selection; stackMode = r.mode
+        stackReplying = false
     }
 
     // MARK: Banners (favorites only)

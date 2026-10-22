@@ -16,6 +16,18 @@ public struct StackCard: Identifiable, Equatable, Sendable {
     }
 }
 
+/// What the stack window shows: cards, or one of two short messages.
+public enum StackMode: Equatable, Sendable {
+    case cards
+    /// Every card was handled.
+    case caughtUp
+    /// There was nothing fresh when the stack was invoked.
+    case empty
+
+    /// The mode a freshly built stack opens in: an empty stack never shows cards.
+    public static func opening(with cards: [StackCard]) -> StackMode { cards.isEmpty ? .empty : .cards }
+}
+
 /// Which cards the favorites stack shows and in what order. Pure, like `ChatListFilter`, so it is tested without a session.
 public enum FavoritesStack {
     /// One card per favorite chat with unread messages, most recent activity first. Ties follow Telegram's `order` (higher first), then id, so the result is deterministic.
@@ -105,4 +117,117 @@ public enum FavoritesStack {
         let kept = selectedId.flatMap { id in cards.firstIndex { $0.id == id } } ?? selection
         return Merged(cards: cards, queued: [], selection: cards.isEmpty ? 0 : min(kept, cards.count - 1))
     }
+}
+
+extension FavoritesStack {
+    /// How many cards show at once: the top one and the edges of the next few behind it.
+    public static let visibleDepth = 4
+
+    /// The selection after moving one card forward or back. It never wraps and always stays in bounds (0 for an empty stack).
+    public static func step(count: Int, selection: Int, forward: Bool) -> Int {
+        guard count > 0 else { return 0 }
+        let current = min(max(selection, 0), count - 1)
+        return min(max(current + (forward ? 1 : -1), 0), count - 1)
+    }
+
+    /// Which cards are drawn and how deep each sits (0 = top). Cards before the selection are gone, cards beyond `visibleDepth` are not drawn.
+    public static func layers(count: Int, selection: Int) -> [(index: Int, depth: Int)] {
+        guard count > 0 else { return [] }
+        let top = min(max(selection, 0), count - 1)
+        return (top..<min(count, top + visibleDepth)).map { ($0, $0 - top) }
+    }
+}
+
+/// Turns a stream of scroll or swipe deltas into one card step per gesture, so trackpad inertia cannot skip through the stack.
+public struct StackScroll: Equatable, Sendable {
+    public static let threshold: Double = 12
+    private var total: Double = 0
+    private var fired = false
+    public init() {}
+
+    /// Adds a delta (positive = next card). Returns `true` for next, `false` for previous, nil until the threshold is crossed, and nil again until `end()`.
+    public mutating func add(_ delta: Double) -> Bool? {
+        guard !fired else { return nil }
+        total += delta
+        guard abs(total) >= Self.threshold else { return nil }
+        fired = true
+        return total > 0
+    }
+
+    /// The gesture and its momentum finished: the next delta starts a new gesture.
+    public mutating func end() { self = StackScroll() }
+}
+
+extension FavoritesStack {
+    /// The chat a reply typed on the top card goes to: the selected card's chat, or nil when there is no such card.
+    public static func replyTarget(cards: [StackCard], selection: Int) -> Int64? {
+        cards.indices.contains(selection) ? cards[selection].id : nil
+    }
+}
+
+extension FavoritesStack {
+    /// The stack after a card was handled: the remaining cards, where the selection sits, and what to show.
+    public struct Removal: Equatable, Sendable {
+        public var cards: [StackCard]
+        public var selection: Int
+        public var mode: StackMode
+    }
+
+    /// Drops the card for `id`. The next card comes forward, or the previous one when the last card went. Removing the final card gives `.caughtUp`; an unknown id changes nothing.
+    public static func dropCard(id: Int64, from cards: [StackCard], selection: Int) -> Removal {
+        guard let at = cards.firstIndex(where: { $0.id == id }) else {
+            return Removal(cards: cards, selection: selection, mode: cards.isEmpty ? .caughtUp : .cards)
+        }
+        var rest = cards; rest.remove(at: at)
+        guard !rest.isEmpty else { return Removal(cards: rest, selection: 0, mode: .caughtUp) }
+        var next = selection
+        if at < selection { next -= 1 }
+        return Removal(cards: rest, selection: min(max(next, 0), rest.count - 1), mode: .cards)
+    }
+}
+
+extension FavoritesStack {
+    /// What VoiceOver reads for a card: the chat title, the unread count, then the newest message text.
+    public static func accessibilityLabel(for card: StackCard) -> String {
+        let count = card.unread == 1 ? "1 unread message" : "\(card.unread) unread messages"
+        return [card.title, count, card.text].filter { !$0.isEmpty }.joined(separator: ", ")
+    }
+
+    /// Applies one incoming message while the stack is open. A chat already in the stack (or waiting in `queued`) gets its count and newest text updated in place, so the order and the selection do not move.
+    /// A new favorite chat goes on top with the selection on it, unless the user is replying: then it waits in `queued` so the card being replied to does not change.
+    /// `chat` is the chat as the session knows it; its unread count may not include this message yet, so a known card counts one more.
+    public static func merge(cards: [StackCard], queued: [StackCard], selection: Int, chat: ChatSummary, line: Line, isReplying: Bool)
+        -> (cards: [StackCard], queued: [StackCard], selection: Int) {
+        func apply(_ card: inout StackCard) {
+            guard !card.lines.contains(where: { $0.id == line.id }) else { return }
+            card.unread += 1
+            card.lines.append(line)
+            card.sender = line.sender; card.text = line.text; card.date = line.date
+        }
+        var cards = cards, queued = queued
+        if let i = cards.firstIndex(where: { $0.id == chat.id }) { apply(&cards[i]); return (cards, queued, selection) }
+        if let i = queued.firstIndex(where: { $0.id == chat.id }) { apply(&queued[i]); return (cards, queued, selection) }
+        let card = StackCard(id: chat.id, title: chat.title, unread: max(chat.unread, 1), lines: [line],
+                             sender: line.sender, text: line.text, date: line.date)
+        if isReplying { queued.append(card); return (cards, queued, selection) }
+        return ([card] + cards, queued, 0)
+    }
+
+    /// Brings the queued chats onto the stack once the reply ends. The newest queued chat ends up on top and the selection moves to it.
+    public static func flush(cards: [StackCard], queued: [StackCard], selection: Int) -> (cards: [StackCard], queued: [StackCard], selection: Int) {
+        guard !queued.isEmpty else { return (cards, queued, selection) }
+        return (queued.reversed() + cards, [], 0)
+    }
+}
+
+/// How the stack changes cards: a slide with a spring normally, a short plain fade when Reduce Motion is on (R12).
+public enum StackMotion: Equatable, Sendable {
+    case slide, fade
+
+    public static func resolve(reduceMotion: Bool) -> StackMotion { reduceMotion ? .fade : .slide }
+
+    /// Seconds a card change takes. A fade is short and has no spring.
+    public var duration: Double { self == .fade ? 0.15 : 0.3 }
+    /// Whether outgoing cards travel across the window. A fade keeps every card in place.
+    public var moves: Bool { self == .slide }
 }

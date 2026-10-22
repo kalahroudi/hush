@@ -186,6 +186,13 @@ final class ShortcutTests: XCTestCase {
         XCTAssertNil(ShortcutStore.rejection(of: nil, against: .default, otherName: "open Hush"))
         XCTAssertNil(ShortcutStore.rejection(of: .default, against: nil, otherName: "open Hush"))
     }
+    func testHotKeySlotIdsAreDistinctAndOpenKeepsItsOriginalId() {
+        XCTAssertEqual(HotKeySlot.open.rawValue, 1)   // the id the single-slot HotKey always used
+        XCTAssertEqual(Set(HotKeySlot.allCases.map(\.rawValue)).count, HotKeySlot.allCases.count)
+        XCTAssertEqual(HotKeySlot(rawValue: 2), .stack)
+        XCTAssertNil(HotKeySlot(rawValue: 0))
+    }
+
     func testDisplayAndValidity() {
         XCTAssertEqual(Shortcut.default.display, "⌃⌥H")
         XCTAssertTrue(Shortcut.default.isValid)
@@ -260,6 +267,115 @@ final class ShortcutTests: XCTestCase {
         XCTAssertEqual(found.shown.map(\.id), [3, 2], "search reaches old chats"); XCTAssertEqual(found.hidden, 0)
         XCTAssertEqual(ChatListFilter.apply(chats, tab: .all, query: "DINNER", isFavorite: fav, now: now).shown.map(\.id), [1], "matches the last message, any case")
         XCTAssertEqual(ChatListFilter.unreadBadge(chats), 1, "muted chats do not count")
+    }
+
+
+    private func stackCard(_ id: Int64, unread: Int = 1) -> StackCard {
+        StackCard(id: id, title: "C\(id)", unread: unread, lines: [], sender: "s", text: "old", date: nil)
+    }
+    private func incomingLine(_ id: Int64, _ text: String) -> Line {
+        Line(id: id, date: Date(), sender: "Mara", text: text, outgoing: false)
+    }
+
+    func testMergeUpdatesExistingCardInPlace() {
+        let cards = [stackCard(1), stackCard(2, unread: 2)]
+        let r = FavoritesStack.merge(cards: cards, queued: [], selection: 1, chat: ChatSummary(id: 2, title: "C2", lastText: "", lastDate: nil),
+                                     line: incomingLine(9, "new"), isReplying: true)
+        XCTAssertEqual(r.cards.map(\.id), [1, 2], "order does not change")
+        XCTAssertEqual(r.cards[1].unread, 3); XCTAssertEqual(r.cards[1].text, "new"); XCTAssertEqual(r.cards[1].sender, "Mara")
+        XCTAssertEqual(r.selection, 1)
+        let again = FavoritesStack.merge(cards: r.cards, queued: [], selection: 1, chat: ChatSummary(id: 2, title: "C2", lastText: "", lastDate: nil),
+                                         line: incomingLine(9, "new"), isReplying: true)
+        XCTAssertEqual(again.cards[1].unread, 3, "the same message counts once")
+    }
+
+    func testMergeNewChatGoesOnTopUnlessReplying() {
+        let chat = ChatSummary(id: 5, title: "New", lastText: "", lastDate: nil, unread: 1)
+        let top = FavoritesStack.merge(cards: [stackCard(1)], queued: [], selection: 0, chat: chat, line: incomingLine(1, "hi"), isReplying: false)
+        XCTAssertEqual(top.cards.map(\.id), [5, 1]); XCTAssertEqual(top.selection, 0); XCTAssertTrue(top.queued.isEmpty)
+
+        let held = FavoritesStack.merge(cards: [stackCard(1)], queued: [], selection: 0, chat: chat, line: incomingLine(1, "hi"), isReplying: true)
+        XCTAssertEqual(held.cards.map(\.id), [1], "the card being replied to does not change")
+        XCTAssertEqual(held.queued.map(\.id), [5])
+
+        let more = FavoritesStack.merge(cards: held.cards, queued: held.queued, selection: 0, chat: chat, line: incomingLine(2, "again"), isReplying: true)
+        XCTAssertEqual(more.queued.count, 1); XCTAssertEqual(more.queued[0].unread, 2); XCTAssertEqual(more.queued[0].text, "again")
+
+        let flushed = FavoritesStack.flush(cards: held.cards, queued: held.queued, selection: 0)
+        XCTAssertEqual(flushed.cards.map(\.id), [5, 1]); XCTAssertTrue(flushed.queued.isEmpty); XCTAssertEqual(flushed.selection, 0)
+        XCTAssertEqual(FavoritesStack.flush(cards: [stackCard(1)], queued: [], selection: 0).selection, 0)
+    }
+
+    func testReplyTargetIsTheSelectedCardsChat() {
+        let cards = [StackCard(id: 10, title: "A", unread: 1, lines: [], sender: "", text: "", date: nil),
+                     StackCard(id: 20, title: "B", unread: 1, lines: [], sender: "", text: "", date: nil)]
+        XCTAssertEqual(FavoritesStack.replyTarget(cards: cards, selection: 0), 10)
+        XCTAssertEqual(FavoritesStack.replyTarget(cards: cards, selection: 1), 20)
+        XCTAssertNil(FavoritesStack.replyTarget(cards: cards, selection: 2))
+        XCTAssertNil(FavoritesStack.replyTarget(cards: [], selection: 0))
+    }
+    func testStackRemoveMovesSelectionAndReportsCaughtUp() {
+        func card(_ id: Int64) -> StackCard { StackCard(id: id, title: "", unread: 1, lines: [], sender: "", text: "", date: nil) }
+        let cards = [card(1), card(2), card(3)]
+        let mid = FavoritesStack.dropCard(id: 2, from: cards, selection: 1)
+        XCTAssertEqual(mid.cards.map(\.id), [1, 3]); XCTAssertEqual(mid.selection, 1, "the next card comes forward"); XCTAssertEqual(mid.mode, .cards)
+        let last = FavoritesStack.dropCard(id: 3, from: cards, selection: 2)
+        XCTAssertEqual(last.selection, 1, "the previous card when the last one went")
+        XCTAssertEqual(FavoritesStack.dropCard(id: 1, from: cards, selection: 2).selection, 1, "a card before the selection shifts it")
+        XCTAssertEqual(FavoritesStack.dropCard(id: 9, from: cards, selection: 1).cards, cards)
+        let done = FavoritesStack.dropCard(id: 1, from: [card(1)], selection: 0)
+        XCTAssertTrue(done.cards.isEmpty); XCTAssertEqual(done.mode, .caughtUp); XCTAssertEqual(done.selection, 0)
+    }
+    func testStackStepMovesByOneWithoutWrapping() {
+        XCTAssertEqual(FavoritesStack.step(count: 3, selection: 0, forward: true), 1)
+        XCTAssertEqual(FavoritesStack.step(count: 3, selection: 2, forward: true), 2, "no wrap at the end")
+        XCTAssertEqual(FavoritesStack.step(count: 3, selection: 0, forward: false), 0, "no wrap at the start")
+        XCTAssertEqual(FavoritesStack.step(count: 3, selection: 2, forward: false), 1)
+        XCTAssertEqual(FavoritesStack.step(count: 0, selection: 0, forward: true), 0)
+        XCTAssertEqual(FavoritesStack.step(count: 1, selection: 0, forward: false), 0)
+    }
+    func testStackCardAccessibilityLabelHasTitleCountAndText() {
+        let c = StackCard(id: 1, title: "Mom", unread: 3, lines: [], sender: "Mom", text: "Dinner at 7?", date: nil)
+        XCTAssertEqual(FavoritesStack.accessibilityLabel(for: c), "Mom, 3 unread messages, Dinner at 7?")
+        var one = c; one.unread = 1
+        XCTAssertEqual(FavoritesStack.accessibilityLabel(for: one), "Mom, 1 unread message, Dinner at 7?")
+        var bare = c; bare.text = ""
+        XCTAssertEqual(FavoritesStack.accessibilityLabel(for: bare), "Mom, 3 unread messages")
+    }
+    func testStackLayersShowTopCardAndPeekingEdges() {
+        XCTAssertTrue(FavoritesStack.layers(count: 0, selection: 0).isEmpty)
+        XCTAssertEqual(FavoritesStack.layers(count: 1, selection: 0).map(\.depth), [0])
+        XCTAssertEqual(FavoritesStack.layers(count: 6, selection: 0).map(\.index), [0, 1, 2, 3], "top card plus three peeking")
+        XCTAssertEqual(FavoritesStack.layers(count: 6, selection: 4).map(\.index), [4, 5], "cards already passed are not drawn")
+        XCTAssertEqual(FavoritesStack.layers(count: 3, selection: 9).map(\.index), [2], "selection stays in bounds")
+        XCTAssertEqual(FavoritesStack.layers(count: 3, selection: 1).map(\.depth), [0, 1])
+    }
+
+    func testStackStepMovesByOneWithoutWrapAndStaysInBounds() {
+        XCTAssertEqual(FavoritesStack.step(count: 3, selection: 0, forward: true), 1)
+        XCTAssertEqual(FavoritesStack.step(count: 3, selection: 2, forward: false), 1)
+        XCTAssertEqual(FavoritesStack.step(count: 3, selection: 2, forward: true), 2, "no wrap at the end")
+        XCTAssertEqual(FavoritesStack.step(count: 3, selection: 0, forward: false), 0, "no wrap at the start")
+        XCTAssertEqual(FavoritesStack.step(count: 3, selection: 9, forward: true), 2, "out of range selection is clamped")
+        XCTAssertEqual(FavoritesStack.step(count: 3, selection: -4, forward: false), 0)
+        for forward in [false, true] {
+            XCTAssertEqual(FavoritesStack.step(count: 0, selection: 0, forward: forward), 0)
+            XCTAssertEqual(FavoritesStack.step(count: 1, selection: 0, forward: forward), 0)
+        }
+    }
+
+    func testStackMotionFadesWhenReduceMotionIsOn() {
+        XCTAssertEqual(StackMotion.resolve(reduceMotion: true), .fade)
+        XCTAssertEqual(StackMotion.resolve(reduceMotion: false), .slide)
+        XCTAssertFalse(StackMotion.fade.moves, "a fade never slides cards")
+        XCTAssertTrue(StackMotion.slide.moves)
+        XCTAssertLessThan(StackMotion.fade.duration, StackMotion.slide.duration)
+    }
+
+    func testStackOpensEmptyWithoutCardsAndWithCardsOtherwise() {
+        XCTAssertEqual(StackMode.opening(with: []), .empty)
+        let card = StackCard(id: 1, title: "A", unread: 1, lines: [], sender: "", text: "hi", date: nil)
+        XCTAssertEqual(StackMode.opening(with: [card]), .cards)
     }
 
     func testFavoritesStackKeepsOnlyUnreadFavorites() {
@@ -519,5 +635,60 @@ final class ShortcutTests: XCTestCase {
         let url = build.issueURL(repo: "kalahroudi/hush", step: "Building", app: "a", system: "b", log: String(repeating: "x ", count: 9000))
         XCTAssertEqual(url?.host, "github.com"); XCTAssertEqual(url?.path, "/kalahroudi/hush/issues/new")
         XCTAssertLessThan(url?.absoluteString.count ?? .max, 8000, "stays within GitHub's URL limit")
+    }
+}
+
+final class UnreadLinesTests: XCTestCase {
+    private func line(_ id: Int64, out: Bool = false) -> Line {
+        Line(id: id, date: Date(timeIntervalSince1970: Double(id)), sender: out ? "You" : "A", text: "m\(id)", outgoing: out)
+    }
+
+    func testLastIncomingSkipsOutgoingAndKeepsOrder() {
+        let l = [line(1), line(2, out: true), line(3), line(4), line(5, out: true)]
+        XCTAssertEqual(TelegramSession.lastIncoming(l, count: 2).map(\.id), [3, 4])
+        XCTAssertEqual(TelegramSession.lastIncoming(l, count: 10).map(\.id), [1, 3, 4])
+    }
+
+    func testLastIncomingZeroOrEmpty() {
+        XCTAssertTrue(TelegramSession.lastIncoming([line(1)], count: 0).isEmpty)
+        XCTAssertTrue(TelegramSession.lastIncoming([], count: 3).isEmpty)
+    }
+
+    @MainActor func testMarkReadAndUnreadLinesFailWhenNotConnected() async {
+        let s = TelegramSession()
+        do { try await s.markRead(chatId: 1); XCTFail("expected error") } catch {}
+        do { _ = try await s.unreadLines(chatId: 1, count: 2); XCTFail("expected error") } catch {}
+        let none = try? await s.unreadLines(chatId: 1, count: 0)
+        XCTAssertEqual(none, [])
+    }
+}
+
+
+final class StackMouseTests: XCTestCase {
+    func testStepMovesByOneWithoutWrapping() {
+        XCTAssertEqual(FavoritesStack.step(count: 3, selection: 0, forward: true), 1)
+        XCTAssertEqual(FavoritesStack.step(count: 3, selection: 2, forward: true), 2)
+        XCTAssertEqual(FavoritesStack.step(count: 3, selection: 0, forward: false), 0)
+        XCTAssertEqual(FavoritesStack.step(count: 3, selection: 2, forward: false), 1)
+    }
+
+    func testStepEmptyAndOutOfRangeStayInBounds() {
+        XCTAssertEqual(FavoritesStack.step(count: 0, selection: 5, forward: true), 0)
+        XCTAssertEqual(FavoritesStack.step(count: 1, selection: 0, forward: true), 0)
+        XCTAssertEqual(FavoritesStack.step(count: 2, selection: 9, forward: false), 0)   // clamped to the last card first, then one step back
+    }
+
+    func testScrollFiresOncePerGesture() {
+        var s = StackScroll()
+        XCTAssertNil(s.add(5))
+        XCTAssertEqual(s.add(8), true)          // crossed the threshold: next
+        XCTAssertNil(s.add(30))                  // inertia of the same gesture is ignored
+        s.end()
+        XCTAssertEqual(s.add(-20), false)        // a new gesture goes to the previous card
+    }
+
+    func testScrollSmallJitterDoesNothing() {
+        var s = StackScroll()
+        XCTAssertNil(s.add(4)); XCTAssertNil(s.add(-4)); XCTAssertNil(s.add(3))
     }
 }
