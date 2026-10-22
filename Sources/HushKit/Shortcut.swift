@@ -10,6 +10,14 @@ public struct Shortcut: Codable, Equatable, Sendable {
     public static let cmd: UInt32 = 256, shift: UInt32 = 512, option: UInt32 = 2048, control: UInt32 = 4096
     public static let `default` = Shortcut(keyCode: 4, modifiers: control | option)   // ⌃⌥H
 
+    public static let stackDefault = Shortcut(keyCode: 1, modifiers: control | option)   // ⌃⌥S
+
+    /// True when two shortcuts are both set and would claim the same key combination.
+    public static func conflict(_ a: Shortcut?, _ b: Shortcut?) -> Bool {
+        guard let a, let b else { return false }
+        return a == b
+    }
+
     public init(keyCode: UInt32, modifiers: UInt32) { self.keyCode = keyCode; self.modifiers = modifiers }
 
     /// From AppKit's `NSEvent.ModifierFlags.rawValue` (command 1<<20, shift 1<<17, option 1<<19, control 1<<18).

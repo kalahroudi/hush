@@ -180,6 +180,19 @@ final class ShortcutTests: XCTestCase {
         XCTAssertFalse(Shortcut(keyCode: 999, modifiers: Shortcut.cmd).isValid)   // unknown key
     }
 
+    func testStackDefaultIsValidAndDiffersFromOpenShortcut() {
+        XCTAssertEqual(Shortcut.stackDefault.display, "⌃⌥S")
+        XCTAssertTrue(Shortcut.stackDefault.isValid)
+        XCTAssertNotEqual(Shortcut.stackDefault, Shortcut.default)
+        XCTAssertFalse(Shortcut.conflict(.stackDefault, .default))
+    }
+
+    func testConflictDetection() {
+        XCTAssertTrue(Shortcut.conflict(.default, .default))
+        XCTAssertFalse(Shortcut.conflict(.default, nil), "a cleared shortcut never conflicts")
+        XCTAssertFalse(Shortcut.conflict(nil, nil))
+    }
+
     func testCocoaFlagConversion() {
         let flags: UInt = (1 << 20) | (1 << 19) | (1 << 17)   // command, option, shift
         let s = Shortcut(keyCode: 49, cocoaFlags: flags)
