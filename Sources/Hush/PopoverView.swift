@@ -125,6 +125,8 @@ struct ThreadView: View {
     let prefs = Prefs.shared
     /// The popover needs a way back to the inbox; the desktop window keeps its chat list on screen instead.
     var showBack = true
+    /// Tab (false) and Shift+Tab (true) in the message box switch chats; nil leaves Tab alone.
+    var onSwitch: ((Bool) -> Void)?
     @State private var sending = false
     private var draft: Binding<String> {
         let id = model.session.openChat?.id ?? 0
@@ -160,7 +162,7 @@ struct ThreadView: View {
                 .onChange(of: s.lines.last?.id) { _, id in if let id { proxy.scrollTo(id, anchor: .bottom) } }
                 .onAppear { if let id = s.lines.last?.id { proxy.scrollTo(id, anchor: .bottom) } }
             }
-            ComposeField(text: draft, onSend: send)
+            ComposeField(text: draft, onSend: send, onTab: onSwitch)
                 .padding(.horizontal, 14).padding(.vertical, 10).overlay(alignment: .top) { Divider() }
         }
     }
