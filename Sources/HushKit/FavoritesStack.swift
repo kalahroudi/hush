@@ -48,4 +48,23 @@ public enum FavoritesStack {
         let j = forward ? i + 1 : i - 1
         return cards.indices.contains(j) ? cards[j].id : cards[i].id
     }
+
+    /// What the stack shows: its cards, the "all caught up" state after the last card was dealt with, or the empty state when it was opened with nothing fresh.
+    public enum Mode: Equatable, Sendable { case cards, caughtUp, empty }
+
+    /// The mode for a freshly built stack: `.empty` with no cards, so no empty stack is ever shown.
+    public static func mode(for cards: [StackCard]) -> Mode { cards.isEmpty ? .empty : .cards }
+
+    /// Drops the card for `id` after a reply or mark-read. The selection moves to the next card, or to the previous one when the last card was removed. Removing the final card gives `.caughtUp`. An unknown id changes nothing.
+    public static func remove(id: Int64, from cards: [StackCard], selection: Int64?) -> (cards: [StackCard], selection: Int64?, mode: Mode) {
+        guard let i = cards.firstIndex(where: { $0.id == id }) else {
+            return (cards, selection, cards.isEmpty ? .empty : .cards)
+        }
+        var rest = cards
+        rest.remove(at: i)
+        if rest.isEmpty { return (rest, nil, .caughtUp) }
+        // Removing a card that is not selected leaves the selection where it was.
+        if let selection, selection != id, rest.contains(where: { $0.id == selection }) { return (rest, selection, .cards) }
+        return (rest, rest[min(i, rest.count - 1)].id, .cards)
+    }
 }

@@ -292,6 +292,26 @@ final class ShortcutTests: XCTestCase {
         XCTAssertEqual(FavoritesStack.step(one, from: 7, forward: false), 7)
     }
 
+    func testFavoritesStackRemoveMovesSelectionAndReachesCaughtUp() {
+        let cards = [1, 2, 3].map { StackCard(id: Int64($0), title: "c\($0)", unread: 1, lines: [], sender: "", text: "", date: nil) }
+        let mid = FavoritesStack.remove(id: 2, from: cards, selection: 2)
+        XCTAssertEqual(mid.cards.map(\.id), [1, 3]); XCTAssertEqual(mid.selection, 3, "next card comes forward"); XCTAssertEqual(mid.mode, .cards)
+        let last = FavoritesStack.remove(id: 3, from: mid.cards, selection: 3)
+        XCTAssertEqual(last.selection, 1, "previous card when the last was removed")
+        let other = FavoritesStack.remove(id: 1, from: cards, selection: 3)
+        XCTAssertEqual(other.selection, 3, "removing another card keeps the selection")
+        let unknown = FavoritesStack.remove(id: 9, from: cards, selection: 2)
+        XCTAssertEqual(unknown.cards, cards); XCTAssertEqual(unknown.selection, 2); XCTAssertEqual(unknown.mode, .cards)
+        let done = FavoritesStack.remove(id: 1, from: [cards[0]], selection: 1)
+        XCTAssertTrue(done.cards.isEmpty); XCTAssertNil(done.selection); XCTAssertEqual(done.mode, .caughtUp)
+    }
+
+    func testFavoritesStackEmptyInputIsEmptyState() {
+        XCTAssertEqual(FavoritesStack.mode(for: []), .empty)
+        let card = StackCard(id: 1, title: "a", unread: 1, lines: [], sender: "", text: "", date: nil)
+        XCTAssertEqual(FavoritesStack.mode(for: [card]), .cards)
+    }
+
     func testChatNavigationStepFollowsDisplayedOrderWithoutWrap() {
         let chats = [1, 2, 3].map { ChatSummary(id: Int64($0), title: "c\($0)") }
         XCTAssertEqual(ChatNavigation.step(chats, from: 1, forward: true, wrap: false)?.id, 2)
