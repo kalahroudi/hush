@@ -165,6 +165,27 @@ final class TDLibTests: XCTestCase {
 }
 
 final class ShortcutTests: XCTestCase {
+    private func store() -> ShortcutStore {
+        let d = UserDefaults(suiteName: "hush.test.\(UUID().uuidString)")!
+        return ShortcutStore(key: "stackShortcut", fallback: .stackDefault, defaults: d)
+    }
+    func testStoreFirstRunGetsFallback() { XCTAssertEqual(store().load(), .stackDefault) }
+    func testStorePersistsCustomShortcut() {
+        let st = store(), s = Shortcut(keyCode: 5, modifiers: Shortcut.cmd | Shortcut.option)
+        st.save(s)
+        XCTAssertEqual(st.load(), s)
+    }
+    func testStoreRemembersCleared() {
+        let st = store()
+        st.save(nil)
+        XCTAssertNil(st.load(), "a cleared shortcut must not fall back to the default")
+    }
+    func testRejectionOnlyForSameShortcut() {
+        XCTAssertNotNil(ShortcutStore.rejection(of: .default, against: .default, otherName: "open Hush"))
+        XCTAssertNil(ShortcutStore.rejection(of: .stackDefault, against: .default, otherName: "open Hush"))
+        XCTAssertNil(ShortcutStore.rejection(of: nil, against: .default, otherName: "open Hush"))
+        XCTAssertNil(ShortcutStore.rejection(of: .default, against: nil, otherName: "open Hush"))
+    }
     func testDisplayAndValidity() {
         XCTAssertEqual(Shortcut.default.display, "⌃⌥H")
         XCTAssertTrue(Shortcut.default.isValid)

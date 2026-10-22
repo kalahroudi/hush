@@ -51,3 +51,30 @@ public struct Shortcut: Codable, Equatable, Sendable {
         122: "F1", 120: "F2", 99: "F3", 118: "F4", 96: "F5", 97: "F6", 98: "F7", 100: "F8", 101: "F9", 109: "F10", 103: "F11", 111: "F12",
     ]
 }
+
+/// Persists an optional shortcut in UserDefaults. A separate flag key remembers a cleared shortcut, so "None" survives a relaunch
+/// while a first run (no flag yet) gets the fallback.
+public struct ShortcutStore {
+    public let key: String
+    public let fallback: Shortcut
+    public let defaults: UserDefaults
+
+    public init(key: String, fallback: Shortcut, defaults: UserDefaults = .standard) {
+        self.key = key; self.fallback = fallback; self.defaults = defaults
+    }
+
+    public func load() -> Shortcut? {
+        guard defaults.object(forKey: key + "Set") != nil else { return fallback }
+        return defaults.data(forKey: key).flatMap { try? JSONDecoder().decode(Shortcut.self, from: $0) }
+    }
+
+    public func save(_ s: Shortcut?) {
+        defaults.set(true, forKey: key + "Set")
+        defaults.set(s.flatMap { try? JSONEncoder().encode($0) }, forKey: key)
+    }
+
+    /// Why `new` cannot be used next to `other`, or nil when it is fine. Clearing (nil) is always allowed.
+    public static func rejection(of new: Shortcut?, against other: Shortcut?, otherName: String) -> String? {
+        Shortcut.conflict(new, other) ? "\(new?.display ?? "") is already used to \(otherName). Pick a different shortcut." : nil
+    }
+}

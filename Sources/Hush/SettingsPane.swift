@@ -67,6 +67,9 @@ struct SettingsPane: View {
                 }
                 SettingsGroup("Shortcut") {
                     SettingRow("Open Hush", "Show or hide the popover from anywhere. Click the box, then press the keys.", error: prefs.shortcutError) { ShortcutRecorder() }
+                    SettingRow("Show the stack", "Opens a focus view of unread messages from your starred chats. Click the box, then press the keys.", error: prefs.stackShortcutError) {
+                        ShortcutRecorder(current: prefs.stackShortcut, fallback: .stackDefault) { prefs.setStackShortcut($0) }
+                    }
                 }
                 SettingsGroup("Keyboard") {
                     SettingRow("Move through chats", "Up and Down arrows move the highlight in the chat list. They stop at the first and last chat.") { Keys("↑  ↓") }

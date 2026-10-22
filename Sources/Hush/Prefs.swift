@@ -30,6 +30,9 @@ final class Prefs {
     private(set) var favorites: Set<Int64>
     private(set) var shortcut: Shortcut?
     private(set) var shortcutError: String?
+    private(set) var stackShortcut: Shortcut?
+    private(set) var stackShortcutError: String?
+    private let stackStore = ShortcutStore(key: "stackShortcut", fallback: .stackDefault)
     var updateChannel: UpdateChannel { didSet { d.set(updateChannel.rawValue, forKey: "updateChannel") } }
     var autoCheckUpdates: Bool { didSet { d.set(autoCheckUpdates, forKey: "autoCheckUpdates") } }
 
@@ -57,13 +60,24 @@ final class Prefs {
         // First run gets the default shortcut. After that, "None" is a valid choice and is remembered.
         if d.object(forKey: "shortcutSet") == nil { shortcut = .default }
         else { shortcut = d.data(forKey: "shortcut").flatMap { try? JSONDecoder().decode(Shortcut.self, from: $0) } }
+        stackShortcut = stackStore.load()
     }
 
     func setShortcut(_ s: Shortcut?) {
+        if let why = ShortcutStore.rejection(of: s, against: stackShortcut, otherName: "show the stack") { shortcutError = why; return }
         shortcut = s
         d.set(true, forKey: "shortcutSet")
         d.set(s.flatMap { try? JSONEncoder().encode($0) }, forKey: "shortcut")
         shortcutError = HotKey.apply(s)
+    }
+
+    /// Stores the stack shortcut, unless it would clash with the open-Hush one; then the old value stays and the error says why.
+    /// Registering it with Carbon comes with the stack window.
+    func setStackShortcut(_ s: Shortcut?) {
+        if let why = ShortcutStore.rejection(of: s, against: shortcut, otherName: "open Hush") { stackShortcutError = why; return }
+        stackShortcut = s
+        stackStore.save(s)
+        stackShortcutError = nil
     }
 
     func isFavorite(_ id: Int64) -> Bool { favorites.contains(id) }
