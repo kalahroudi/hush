@@ -10,6 +10,12 @@ public enum ComposeKey {
         shift || option || control ? .newline : .send
     }
 
+    /// True when a key press is Tab or Shift+Tab meant to switch chats. Tab with Control, Option or Command, and Tab while an
+    /// input method is composing, are left to the text view.
+    public static func switchesChat(keyCode: UInt16, option: Bool, control: Bool, command: Bool, composing: Bool) -> Bool {
+        keyCode == 48 && !option && !control && !command && !composing
+    }
+
     public static let hint = "Return to send · Shift+Return for a new line"
 }
 
