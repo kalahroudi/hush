@@ -28,6 +28,8 @@ public final class TelegramSession {
     public var onError: (@MainActor (Error) -> Void)?
     /// Fired for every incoming message in a chat that is not muted and not currently open.
     public var onIncoming: ((ChatSummary, String) -> Void)?
+    /// Fired with the full line for every incoming message in a chat that is not open, muted or not. The favorites stack follows it live.
+    public var onIncomingLine: ((ChatSummary, Line) -> Void)?
 
     public var chats: [ChatSummary] { store.sorted }
     public var unread: Int { store.unreadUnmuted }
@@ -256,8 +258,13 @@ public final class TelegramSession {
                 if lines.count > maxLines { lines.removeFirst(lines.count - maxLines) }
                 if !outgoing { markRead(cid) }
             }
-        } else if !outgoing, let chat = store.chats[cid], !chat.muted {
-            onIncoming?(chat, MessageText.render(m.obj("content")))
+        } else if !outgoing, let chat = store.chats[cid] {
+            if !chat.muted { onIncoming?(chat, MessageText.render(m.obj("content"))) }
+            if let hook = onIncomingLine {
+                Task {
+                    if let line = await makeLines([m], chatId: cid).first { hook(chat, line) }
+                }
+            }
         }
     }
 

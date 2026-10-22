@@ -270,6 +270,42 @@ final class ShortcutTests: XCTestCase {
     }
 
 
+    private func stackCard(_ id: Int64, unread: Int = 1) -> StackCard {
+        StackCard(id: id, title: "C\(id)", unread: unread, lines: [], sender: "s", text: "old", date: nil)
+    }
+    private func incomingLine(_ id: Int64, _ text: String) -> Line {
+        Line(id: id, date: Date(), sender: "Mara", text: text, outgoing: false)
+    }
+
+    func testMergeUpdatesExistingCardInPlace() {
+        let cards = [stackCard(1), stackCard(2, unread: 2)]
+        let r = FavoritesStack.merge(cards: cards, queued: [], selection: 1, chat: ChatSummary(id: 2, title: "C2", lastText: "", lastDate: nil),
+                                     line: incomingLine(9, "new"), isReplying: true)
+        XCTAssertEqual(r.cards.map(\.id), [1, 2], "order does not change")
+        XCTAssertEqual(r.cards[1].unread, 3); XCTAssertEqual(r.cards[1].text, "new"); XCTAssertEqual(r.cards[1].sender, "Mara")
+        XCTAssertEqual(r.selection, 1)
+        let again = FavoritesStack.merge(cards: r.cards, queued: [], selection: 1, chat: ChatSummary(id: 2, title: "C2", lastText: "", lastDate: nil),
+                                         line: incomingLine(9, "new"), isReplying: true)
+        XCTAssertEqual(again.cards[1].unread, 3, "the same message counts once")
+    }
+
+    func testMergeNewChatGoesOnTopUnlessReplying() {
+        let chat = ChatSummary(id: 5, title: "New", lastText: "", lastDate: nil, unread: 1)
+        let top = FavoritesStack.merge(cards: [stackCard(1)], queued: [], selection: 0, chat: chat, line: incomingLine(1, "hi"), isReplying: false)
+        XCTAssertEqual(top.cards.map(\.id), [5, 1]); XCTAssertEqual(top.selection, 0); XCTAssertTrue(top.queued.isEmpty)
+
+        let held = FavoritesStack.merge(cards: [stackCard(1)], queued: [], selection: 0, chat: chat, line: incomingLine(1, "hi"), isReplying: true)
+        XCTAssertEqual(held.cards.map(\.id), [1], "the card being replied to does not change")
+        XCTAssertEqual(held.queued.map(\.id), [5])
+
+        let more = FavoritesStack.merge(cards: held.cards, queued: held.queued, selection: 0, chat: chat, line: incomingLine(2, "again"), isReplying: true)
+        XCTAssertEqual(more.queued.count, 1); XCTAssertEqual(more.queued[0].unread, 2); XCTAssertEqual(more.queued[0].text, "again")
+
+        let flushed = FavoritesStack.flush(cards: held.cards, queued: held.queued, selection: 0)
+        XCTAssertEqual(flushed.cards.map(\.id), [5, 1]); XCTAssertTrue(flushed.queued.isEmpty); XCTAssertEqual(flushed.selection, 0)
+        XCTAssertEqual(FavoritesStack.flush(cards: [stackCard(1)], queued: [], selection: 0).selection, 0)
+    }
+
     func testReplyTargetIsTheSelectedCardsChat() {
         let cards = [StackCard(id: 10, title: "A", unread: 1, lines: [], sender: "", text: "", date: nil),
                      StackCard(id: 20, title: "B", unread: 1, lines: [], sender: "", text: "", date: nil)]
