@@ -273,6 +273,25 @@ final class ShortcutTests: XCTestCase {
         XCTAssertEqual(card.text, "3")
     }
 
+    func testFavoritesStackStepMovesByOneWithoutWrapping() {
+        let cards = [1, 2, 3].map { StackCard(id: Int64($0), title: "c\($0)", unread: 1, lines: [], sender: "", text: "", date: nil) }
+        XCTAssertEqual(FavoritesStack.step(cards, from: 1, forward: true), 2)
+        XCTAssertEqual(FavoritesStack.step(cards, from: 2, forward: true), 3)
+        XCTAssertEqual(FavoritesStack.step(cards, from: 3, forward: false), 2)
+        XCTAssertEqual(FavoritesStack.step(cards, from: 3, forward: true), 3, "no wrap at the end")
+        XCTAssertEqual(FavoritesStack.step(cards, from: 1, forward: false), 1, "no wrap at the start")
+        XCTAssertEqual(FavoritesStack.step(cards, from: nil, forward: true), 1)
+        XCTAssertEqual(FavoritesStack.step(cards, from: 99, forward: false), 3, "unknown selection starts from the matching end")
+    }
+
+    func testFavoritesStackStepEmptyAndSingle() {
+        XCTAssertNil(FavoritesStack.step([], from: nil, forward: true))
+        XCTAssertNil(FavoritesStack.step([], from: 1, forward: false))
+        let one = [StackCard(id: 7, title: "x", unread: 1, lines: [], sender: "", text: "", date: nil)]
+        XCTAssertEqual(FavoritesStack.step(one, from: 7, forward: true), 7)
+        XCTAssertEqual(FavoritesStack.step(one, from: 7, forward: false), 7)
+    }
+
     func testChatNavigationStepFollowsDisplayedOrderWithoutWrap() {
         let chats = [1, 2, 3].map { ChatSummary(id: Int64($0), title: "c\($0)") }
         XCTAssertEqual(ChatNavigation.step(chats, from: 1, forward: true, wrap: false)?.id, 2)

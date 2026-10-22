@@ -40,4 +40,12 @@ public enum FavoritesStack {
             return a.chat.id < b.chat.id
         }.map(\.card)
     }
+
+    /// The card after (`forward`) or before `from`. The stack never wraps: at either end the selection stays put. A nil or unknown `from` gives the first card going forward and the last going backward. Nil only for an empty stack.
+    public static func step(_ cards: [StackCard], from: Int64?, forward: Bool) -> Int64? {
+        guard let first = cards.first, let last = cards.last else { return nil }
+        guard let from, let i = cards.firstIndex(where: { $0.id == from }) else { return (forward ? first : last).id }
+        let j = forward ? i + 1 : i - 1
+        return cards.indices.contains(j) ? cards[j].id : cards[i].id
+    }
 }
