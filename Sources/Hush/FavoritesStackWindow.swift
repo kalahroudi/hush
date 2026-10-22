@@ -31,6 +31,7 @@ struct StackView: View {
         .onKeyPress(.rightArrow) { move(forward: true) }
         .onKeyPress(.upArrow) { move(forward: false) }
         .onKeyPress(.leftArrow) { move(forward: false) }
+        .background(ScrollCatcher { forward in move(forward: forward) })
         .overlay(alignment: .topTrailing) {
             Button(action: close) { Image(systemName: "xmark.circle.fill").font(.system(size: 18)) }
                 .buttonStyle(.plain).foregroundStyle(.secondary).padding(8)
@@ -49,16 +50,24 @@ struct StackView: View {
         return ZStack {
             ForEach(layers.reversed(), id: \.index) { layer in
                 CardView(card: model.stackCards[layer.index], top: layer.depth == 0)
+                    .contentShape(RoundedRectangle(cornerRadius: 16))
+                    .onTapGesture { if layer.depth > 0 { select(layer.index) } }   // click a peeking card to bring it up
                     .scaleEffect(1 - CGFloat(layer.depth) * 0.05, anchor: .top)
                     .offset(y: CGFloat(layer.depth) * 14)
                     .opacity(1 - Double(layer.depth) * 0.12)
                     .zIndex(Double(-layer.depth))
                     .transition(reduceMotion ? .opacity : .asymmetric(insertion: .opacity, removal: .move(edge: .leading).combined(with: .opacity)))
-                    .allowsHitTesting(layer.depth == 0)
             }
         }
         .padding(.horizontal, 24).padding(.bottom, 40).padding(.top, 20)
         .animation(reduceMotion ? .easeInOut(duration: 0.15) : .spring(duration: 0.3), value: model.stackSelection)
+    }
+
+    private func select(_ index: Int) { model.stackSelection = min(max(index, 0), model.stackCards.count - 1) }
+
+    private func move(forward: Bool) {
+        guard model.stackMode == .cards else { return }
+        model.stackSelection = FavoritesStack.step(count: model.stackCards.count, selection: model.stackSelection, forward: forward)
     }
 
     private func message(_ title: String, _ detail: String, symbol: String) -> some View {
@@ -109,5 +118,35 @@ struct StackView: View {
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("\(card.title), \(card.unread) unread. \(card.text)")
         }
+    }
+}
+
+
+/// Reports one step per scroll or swipe gesture over the stack window (positive = next card). It listens with a local event monitor so it never blocks clicks on the cards.
+private struct ScrollCatcher: NSViewRepresentable {
+    var onStep: (Bool) -> Void
+
+    func makeNSView(context: Context) -> NSView { Catcher() }
+    func updateNSView(_ view: NSView, context: Context) { (view as? Catcher)?.onStep = onStep }
+
+    final class Catcher: NSView {
+        var onStep: (Bool) -> Void = { _ in }
+        private var monitor: Any?
+        private var scroll = StackScroll()
+
+        override func viewDidMoveToWindow() {
+            if let monitor { NSEvent.removeMonitor(monitor); self.monitor = nil }
+            guard window != nil else { return }
+            monitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { [weak self] event in
+                guard let self, event.window === self.window else { return event }
+                if event.phase == .began || event.phase == .mayBegin { self.scroll.end() }
+                let (dx, dy) = (event.scrollingDeltaX, event.scrollingDeltaY)
+                if let forward = self.scroll.add(Double(abs(dy) >= abs(dx) ? -dy : -dx)) { self.onStep(forward) }
+                if event.phase == .ended || event.momentumPhase == .ended || event.phase == .cancelled { self.scroll.end() }
+                return nil
+            }
+        }
+
+        deinit { if let monitor { NSEvent.removeMonitor(monitor) } }
     }
 }
