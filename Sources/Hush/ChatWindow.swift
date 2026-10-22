@@ -12,6 +12,8 @@ struct ChatWindowView: View {
     @State private var tab = ChatTab(rawValue: UserDefaults.standard.string(forKey: "windowTab") ?? "") ?? .all
     @State private var query = ""
     @State private var showOlder = false
+    @State private var highlighted: Int64?   // the keyboard cursor; not the same as the open chat
+    @FocusState private var listFocused: Bool
 
     var body: some View {
         Group {
@@ -39,9 +41,14 @@ struct ChatWindowView: View {
 
     // MARK: Sidebar
 
+    /// The displayed order, shared by the list and the keyboard handlers.
+    private var result: (shown: [ChatSummary], hidden: Int) {
+        ChatListFilter.apply(model.session.chats, tab: tab, query: query, showOlder: showOlder, isFavorite: prefs.isFavorite)
+    }
+
     private var sidebar: some View {
         let chats = model.session.chats
-        let result = ChatListFilter.apply(chats, tab: tab, query: query, showOlder: showOlder, isFavorite: prefs.isFavorite)
+        let result = result
         let unread = ChatListFilter.unreadBadge(chats)
         return VStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 8) {
@@ -60,12 +67,15 @@ struct ChatWindowView: View {
                 Text(emptyText(chats.isEmpty)).font(.system(size: 12.5)).foregroundStyle(.secondary).multilineTextAlignment(.center).padding(.horizontal, 16)
                 Spacer()
             } else {
+                ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(spacing: 0) {
                         ForEach(result.shown) { chat in
-                            Button { select(chat) } label: { InboxView.Row(chat: chat, favorite: prefs.isFavorite(chat.id)) }
+                            Button { highlighted = chat.id; select(chat) } label: { InboxView.Row(chat: chat, favorite: prefs.isFavorite(chat.id)) }
                                 .buttonStyle(RowStyle())
                                 .background(model.session.openChat?.id == chat.id ? Theme.accentSoft : .clear)
+                                .overlay { if highlighted == chat.id { RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.accent, lineWidth: 1.5).padding(2) } }
+                                .id(chat.id)
                         }
                         if result.hidden > 0 || (showOlder && tab == .all) {
                             Button {
@@ -76,6 +86,16 @@ struct ChatWindowView: View {
                             }.buttonStyle(.plain)
                         }
                     }
+                }
+                .focusable()
+                .focused($listFocused)
+                .focusEffectDisabled()
+                .onKeyPress(.downArrow) { move(forward: true) }
+                .onKeyPress(.upArrow) { move(forward: false) }
+                .onKeyPress(.return) { openHighlighted() }
+                .onChange(of: highlighted) { _, id in if let id { proxy.scrollTo(id) } }
+                .onChange(of: result.shown.map(\.id)) { _, ids in if let h = highlighted, !ids.contains(h) { highlighted = nil } }
+                .onAppear { listFocused = true }
                 }
             }
         }
@@ -88,6 +108,19 @@ struct ChatWindowView: View {
         if noChats { return "No chats yet." }
         if !query.trimmingCharacters(in: .whitespaces).isEmpty { return "No chat matches that search." }
         switch tab { case .unread: return "Nothing unread."; case .favorites: return "No favorites yet. Star a chat to add it here."; case .all: return "No chats yet." }
+    }
+
+    /// Arrow keys move the highlight only and do not wrap. Starts from the highlight, else the open chat.
+    private func move(forward: Bool) -> KeyPress.Result {
+        guard let next = ChatNavigation.step(result.shown, from: highlighted ?? model.session.openChat?.id, forward: forward, wrap: false) else { return .ignored }
+        highlighted = next.id
+        return .handled
+    }
+
+    private func openHighlighted() -> KeyPress.Result {
+        guard let id = highlighted, let chat = result.shown.first(where: { $0.id == id }) else { return .ignored }
+        select(chat)
+        return .handled
     }
 
     private func select(_ chat: ChatSummary) {
