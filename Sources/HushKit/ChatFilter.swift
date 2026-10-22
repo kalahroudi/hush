@@ -43,3 +43,15 @@ public enum ChatListFilter {
     /// The number on the Unread tab: chats with unread messages that are not muted.
     public static func unreadBadge(_ chats: [ChatSummary]) -> Int { chats.filter { $0.unread > 0 && !$0.muted }.count }
 }
+
+/// Which chat a navigation key lands on. Pure, and given the list `ChatListFilter.apply` returns, so it follows the displayed order.
+public enum ChatNavigation {
+    /// The chat after (`forward`) or before `from` in `chats`. At the ends it wraps to the other end, or stays put when `wrap` is off. A nil or unknown `from` gives the first chat going forward and the last going backward. Nil only for an empty list.
+    public static func step(_ chats: [ChatSummary], from: Int64?, forward: Bool, wrap: Bool) -> ChatSummary? {
+        guard let first = chats.first, let last = chats.last else { return nil }
+        guard let from, let i = chats.firstIndex(where: { $0.id == from }) else { return forward ? first : last }
+        let j = forward ? i + 1 : i - 1
+        if chats.indices.contains(j) { return chats[j] }
+        return wrap ? (forward ? first : last) : chats[i]
+    }
+}

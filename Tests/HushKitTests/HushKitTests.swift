@@ -219,6 +219,38 @@ final class ShortcutTests: XCTestCase {
         XCTAssertEqual(ChatListFilter.unreadBadge(chats), 1, "muted chats do not count")
     }
 
+    func testChatNavigationStepFollowsDisplayedOrderWithoutWrap() {
+        let chats = [1, 2, 3].map { ChatSummary(id: Int64($0), title: "c\($0)") }
+        XCTAssertEqual(ChatNavigation.step(chats, from: 1, forward: true, wrap: false)?.id, 2)
+        XCTAssertEqual(ChatNavigation.step(chats, from: 3, forward: false, wrap: false)?.id, 2)
+        XCTAssertEqual(ChatNavigation.step(chats, from: 3, forward: true, wrap: false)?.id, 3, "no wrap at the end")
+        XCTAssertEqual(ChatNavigation.step(chats, from: 1, forward: false, wrap: false)?.id, 1, "no wrap at the start")
+        // Fed with the filter's output, favorites come first.
+        let shown = ChatListFilter.apply(chats, tab: .all, showOlder: true, isFavorite: { $0 == 3 }).shown
+        XCTAssertEqual(ChatNavigation.step(shown, from: 3, forward: true, wrap: false)?.id, 1)
+    }
+
+    func testChatNavigationStepWrapsAndHandlesMissingCurrent() {
+        let chats = [1, 2, 3].map { ChatSummary(id: Int64($0), title: "c\($0)") }
+        XCTAssertEqual(ChatNavigation.step(chats, from: 3, forward: true, wrap: true)?.id, 1)
+        XCTAssertEqual(ChatNavigation.step(chats, from: 1, forward: false, wrap: true)?.id, 3)
+        XCTAssertEqual(ChatNavigation.step(chats, from: nil, forward: true, wrap: true)?.id, 1)
+        XCTAssertEqual(ChatNavigation.step(chats, from: nil, forward: false, wrap: true)?.id, 3)
+        XCTAssertEqual(ChatNavigation.step(chats, from: 99, forward: true, wrap: false)?.id, 1, "unknown id acts like nil")
+    }
+
+    func testChatNavigationStepEmptyAndSingleList() {
+        let one = [ChatSummary(id: 7, title: "only")]
+        for wrap in [false, true] {
+            for forward in [false, true] {
+                XCTAssertNil(ChatNavigation.step([], from: nil, forward: forward, wrap: wrap))
+                XCTAssertNil(ChatNavigation.step([], from: 7, forward: forward, wrap: wrap))
+                XCTAssertEqual(ChatNavigation.step(one, from: 7, forward: forward, wrap: wrap)?.id, 7)
+                XCTAssertEqual(ChatNavigation.step(one, from: nil, forward: forward, wrap: wrap)?.id, 7)
+            }
+        }
+    }
+
     func testChatListFilterPinsFavoritesFirst() {
         let now = Date()
         let old = now.addingTimeInterval(-30 * 86_400)
