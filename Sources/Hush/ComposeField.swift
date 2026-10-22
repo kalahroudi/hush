@@ -11,7 +11,7 @@ struct ComposeField: View {
     @Binding var text: String
     var placeholder = "Message"
     var onSend: () -> Void
-    /// Tab (false) and Shift+Tab (true); without it Tab keeps its default behavior.
+    /// Tab (false) or Shift+Tab (true) pressed in the box. Without it, Tab behaves as the text view normally does.
     var onTab: ((Bool) -> Void)?
     @State private var focused = false
 
@@ -43,8 +43,10 @@ private final class KeyTextView: NSTextView {
             }
             return
         }
-        if event.keyCode == 48, !hasMarkedText(), let onTab {       // Tab; never steal it from an input method
-            onTab(event.modifierFlags.contains(.shift))
+        let f = event.modifierFlags
+        if let onTab, ComposeKey.switchesChat(keyCode: event.keyCode, option: f.contains(.option), control: f.contains(.control),
+                                              command: f.contains(.command), composing: hasMarkedText()) {
+            onTab(f.contains(.shift))
             return
         }
         super.keyDown(with: event)

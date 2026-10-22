@@ -191,6 +191,15 @@ final class ShortcutTests: XCTestCase {
         XCTAssertEqual(ComposeKey.action(shift: false, option: false, control: true), .newline)
     }
 
+    func testTabSwitchesChatsUnlessComposingOrModified() {
+        XCTAssertTrue(ComposeKey.switchesChat(keyCode: 48, option: false, control: false, command: false, composing: false))
+        XCTAssertFalse(ComposeKey.switchesChat(keyCode: 48, option: false, control: false, command: false, composing: true))
+        XCTAssertFalse(ComposeKey.switchesChat(keyCode: 48, option: true, control: false, command: false, composing: false))
+        XCTAssertFalse(ComposeKey.switchesChat(keyCode: 48, option: false, control: true, command: false, composing: false))
+        XCTAssertFalse(ComposeKey.switchesChat(keyCode: 48, option: false, control: false, command: true, composing: false))
+        XCTAssertFalse(ComposeKey.switchesChat(keyCode: 36, option: false, control: false, command: false, composing: false))
+    }
+
     func testBannerPolicyDefaultsToFavorites() {
         XCTAssertTrue(BannerPolicy.shouldShow(enabled: true, favoritesOnly: true, isFavorite: true))
         XCTAssertFalse(BannerPolicy.shouldShow(enabled: true, favoritesOnly: true, isFavorite: false))
