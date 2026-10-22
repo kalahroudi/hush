@@ -14,6 +14,7 @@ final class StackPanel: NSPanel {
 struct StackView: View {
     let model = AppModel.shared
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorScheme) private var scheme
     var close: () -> Void
 
     var body: some View {
@@ -35,6 +36,7 @@ struct StackView: View {
     }
 
     private var cards: some View {
+        let motion = StackMotion.resolve(reduceMotion: reduceMotion)
         let layers = FavoritesStack.layers(count: model.stackCards.count, selection: model.stackSelection)
         return ZStack {
             ForEach(layers.reversed(), id: \.index) { layer in
@@ -43,12 +45,12 @@ struct StackView: View {
                     .offset(y: CGFloat(layer.depth) * 14)
                     .opacity(1 - Double(layer.depth) * 0.12)
                     .zIndex(Double(-layer.depth))
-                    .transition(reduceMotion ? .opacity : .asymmetric(insertion: .opacity, removal: .move(edge: .leading).combined(with: .opacity)))
+                    .transition(!motion.moves ? .opacity : .asymmetric(insertion: .opacity, removal: .move(edge: .leading).combined(with: .opacity)))
                     .allowsHitTesting(layer.depth == 0)
             }
         }
         .padding(.horizontal, 24).padding(.bottom, 40).padding(.top, 20)
-        .animation(reduceMotion ? .easeInOut(duration: 0.15) : .spring(duration: 0.3), value: model.stackSelection)
+        .animation(motion == .fade ? .easeInOut(duration: motion.duration) : .spring(duration: motion.duration), value: model.stackSelection)
     }
 
     private func message(_ title: String, _ detail: String, symbol: String) -> some View {
@@ -62,7 +64,7 @@ struct StackView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Theme.card, in: RoundedRectangle(cornerRadius: 16))
         .overlay(RoundedRectangle(cornerRadius: 16).stroke(Theme.hairline))
-        .shadow(color: .black.opacity(0.25), radius: 18, y: 8)
+        .shadow(color: .black.opacity(scheme == .dark ? 0.5 : 0.25), radius: 18, y: 8)
         .padding(24)
         .contentShape(RoundedRectangle(cornerRadius: 16))
         .onTapGesture(perform: close)   // a click closes the finished stack, like Esc
@@ -72,6 +74,7 @@ struct StackView: View {
     struct CardView: View {
         let card: StackCard
         let top: Bool
+        @Environment(\.colorScheme) private var scheme
         var body: some View {
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
@@ -95,7 +98,7 @@ struct StackView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .background(Theme.card, in: RoundedRectangle(cornerRadius: 16))
             .overlay(RoundedRectangle(cornerRadius: 16).stroke(Theme.hairline))
-            .shadow(color: .black.opacity(top ? 0.25 : 0.12), radius: top ? 18 : 8, y: top ? 8 : 3)
+            .shadow(color: .black.opacity((top ? 0.25 : 0.12) * (scheme == .dark ? 2 : 1)), radius: top ? 18 : 8, y: top ? 8 : 3)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("\(card.title), \(card.unread) unread. \(card.text)")
         }
