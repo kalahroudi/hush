@@ -32,6 +32,10 @@ struct StackView: View {
         .onKeyPress(.upArrow) { move(forward: false) }
         .onKeyPress(.leftArrow) { move(forward: false) }
         .background(ScrollCatcher { forward in _ = move(forward: forward) })
+        .onKeyPress("d") {
+            guard model.stackMode == .cards, !model.stackReplying else { return .ignored }
+            model.markStackDone(); return .handled
+        }
         .onKeyPress(.return) {
             guard model.stackMode == .cards, !model.stackReplying else { return .ignored }
             model.stackReplying = true; return .handled
@@ -100,6 +104,11 @@ struct StackView: View {
                 HStack {
                     Text(card.title).font(.system(size: 15, weight: .semibold)).lineLimit(1)
                     Spacer()
+                    if top {
+                        Button("Done", action: model.markStackDone).buttonStyle(.plain)
+                            .font(.system(size: 11.5, weight: .medium)).foregroundStyle(.secondary)
+                            .help("Mark read (D)").accessibilityLabel("Mark read")
+                    }
                     Text("\(card.unread)").font(.system(size: 11, weight: .semibold, design: .monospaced))
                         .padding(.horizontal, 7).padding(.vertical, 2)
                         .background(Theme.accentSoft, in: Capsule()).foregroundStyle(Theme.accent)
