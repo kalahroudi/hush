@@ -37,7 +37,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
         UNUserNotificationCenter.current().delegate = self
         model.requestNotificationAccess()   // asks once; without it macOS silently drops every banner
         model.start()
-        HotKey.onPress = { [weak self] in self?.toggleMain() }
+        HotKey.onPress[.open] = { [weak self] in self?.toggleMain() }
         Prefs.shared.setShortcut(Prefs.shared.shortcut)   // registers the saved (or default) shortcut
         watchStatus()
         startControl()

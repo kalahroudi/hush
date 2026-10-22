@@ -43,3 +43,9 @@ public struct Shortcut: Codable, Equatable, Sendable {
         122: "F1", 120: "F2", 99: "F3", 118: "F4", 96: "F5", 97: "F6", 98: "F7", 100: "F8", 101: "F9", 109: "F10", 103: "F11", 111: "F12",
     ]
 }
+
+/// The global shortcuts the app registers. Raw values are the Carbon hotkey ids, so `open` must stay 1.
+public enum HotKeySlot: UInt32, CaseIterable, Sendable {
+    case open = 1
+    case stack = 2
+}

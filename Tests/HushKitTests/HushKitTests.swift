@@ -165,6 +165,13 @@ final class TDLibTests: XCTestCase {
 }
 
 final class ShortcutTests: XCTestCase {
+    func testHotKeySlotIdsAreDistinctAndOpenKeepsItsOriginalId() {
+        XCTAssertEqual(HotKeySlot.open.rawValue, 1)   // the id the single-slot HotKey always used
+        XCTAssertEqual(Set(HotKeySlot.allCases.map(\.rawValue)).count, HotKeySlot.allCases.count)
+        XCTAssertEqual(HotKeySlot(rawValue: 2), .stack)
+        XCTAssertNil(HotKeySlot(rawValue: 0))
+    }
+
     func testDisplayAndValidity() {
         XCTAssertEqual(Shortcut.default.display, "⌃⌥H")
         XCTAssertTrue(Shortcut.default.isValid)
