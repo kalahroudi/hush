@@ -11,11 +11,13 @@ struct ComposeField: View {
     @Binding var text: String
     var placeholder = "Message"
     var onSend: () -> Void
+    /// Tab (false) and Shift+Tab (true); without it Tab keeps its default behavior.
+    var onTab: ((Bool) -> Void)?
     @State private var focused = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
-            ComposeTextView(text: $text, placeholder: placeholder, focused: $focused, onSend: onSend)
+            ComposeTextView(text: $text, placeholder: placeholder, focused: $focused, onSend: onSend, onTab: onTab)
                 .padding(.horizontal, 10).padding(.vertical, 7)
                 .background(Theme.fill, in: RoundedRectangle(cornerRadius: 9))
                 .overlay(RoundedRectangle(cornerRadius: 9).stroke(focused ? Theme.accent : Theme.hairline, lineWidth: focused ? 1.5 : 1))
@@ -27,6 +29,7 @@ struct ComposeField: View {
 
 private final class KeyTextView: NSTextView {
     var onSend: (() -> Void)?
+    var onTab: ((Bool) -> Void)?
     var onFocus: ((Bool) -> Void)?
     var placeholder = ""
 
@@ -38,6 +41,10 @@ private final class KeyTextView: NSTextView {
             case .send: onSend?()
             case .newline: insertNewlineIgnoringFieldEditor(nil)
             }
+            return
+        }
+        if event.keyCode == 48, !hasMarkedText(), let onTab {       // Tab; never steal it from an input method
+            onTab(event.modifierFlags.contains(.shift))
             return
         }
         super.keyDown(with: event)
@@ -69,6 +76,7 @@ private struct ComposeTextView: NSViewRepresentable {
     let placeholder: String
     @Binding var focused: Bool
     let onSend: () -> Void
+    let onTab: ((Bool) -> Void)?
     static let font = NSFont.systemFont(ofSize: 13.5)
     static let maxLines: CGFloat = 6
 
@@ -107,6 +115,7 @@ private struct ComposeTextView: NSViewRepresentable {
         guard let tv = sv.documentView as? KeyTextView else { return }
         if tv.string != text { tv.string = text; tv.needsDisplay = true }
         tv.onSend = onSend
+        tv.onTab = onTab
         tv.onFocus = { f in DispatchQueue.main.async { focused = f } }
     }
 

@@ -93,6 +93,7 @@ struct ChatWindowView: View {
                 .onKeyPress(.downArrow) { move(forward: true) }
                 .onKeyPress(.upArrow) { move(forward: false) }
                 .onKeyPress(.return) { openHighlighted() }
+                .onKeyPress(keys: [.tab]) { press in switchChat(forward: !press.modifiers.contains(.shift)); return .handled }
                 .onChange(of: highlighted) { _, id in if let id { proxy.scrollTo(id) } }
                 .onChange(of: result.shown.map(\.id)) { _, ids in if let h = highlighted, !ids.contains(h) { highlighted = nil } }
                 .onAppear { listFocused = true }
@@ -117,6 +118,13 @@ struct ChatWindowView: View {
         return .handled
     }
 
+    /// Tab and Shift+Tab open the next or previous chat from the open one, wrapping at the ends.
+    private func switchChat(forward: Bool) {
+        guard let next = ChatNavigation.step(result.shown, from: model.session.openChat?.id, forward: forward, wrap: true) else { return }
+        highlighted = next.id
+        select(next)
+    }
+
     private func openHighlighted() -> KeyPress.Result {
         guard let id = highlighted, let chat = result.shown.first(where: { $0.id == id }) else { return .ignored }
         select(chat)
@@ -139,7 +147,7 @@ struct ChatWindowView: View {
 
     @ViewBuilder private var detail: some View {
         if let chat = model.session.openChat {
-            ThreadView(showBack: false).id(chat.id)   // a new view per chat, so the message box takes focus again
+            ThreadView(showBack: false, onSwitch: { switchChat(forward: !$0) }).id(chat.id)   // a new view per chat, so the message box takes focus again
         } else {
             VStack(spacing: 6) {
                 Image(systemName: "bubble.left.and.bubble.right").font(.system(size: 26)).foregroundStyle(.tertiary)
