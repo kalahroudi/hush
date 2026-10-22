@@ -122,10 +122,6 @@ final class AppModel {
         stackMode = StackMode.opening(with: stackCards)
     }
 
-    /// Moves the stack to the next or previous card, without wrapping.
-    func stepStack(forward: Bool) {
-        guard stackMode == .cards else { return }
-        stackSelection = FavoritesStack.step(count: stackCards.count, selection: stackSelection, forward: forward)
     /// Updates the open stack with a message that just arrived in a favorite chat.
     private func stackIncoming(_ chat: ChatSummary, _ line: Line) {
         guard stackOpen, settings.isFavorite(chat.id) else { return }
@@ -143,7 +139,6 @@ final class AppModel {
         if !stackCards.isEmpty { stackMode = .cards }
     }
 
-    /// Sends the draft typed on the top card to that card's chat. The draft comes back if sending fails.
     /// Sends the draft typed on the top card to that card's chat, then marks the chat read and drops its card.
     /// The draft comes back and the card stays if sending fails.
     func sendStackReply() {
@@ -173,7 +168,7 @@ final class AppModel {
     private func finishStackCard(_ id: Int64) async {
         do { try await session.markRead(chatId: id) }
         catch { report(error, area: "Marking a chat read"); return }
-        let r = FavoritesStack.remove(id: id, from: stackCards, selection: stackSelection)
+        let r = FavoritesStack.dropCard(id: id, from: stackCards, selection: stackSelection)
         stackCards = r.cards; stackSelection = r.selection; stackMode = r.mode
         stackReplying = false
     }

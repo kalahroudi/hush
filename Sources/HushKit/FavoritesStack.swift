@@ -174,7 +174,7 @@ extension FavoritesStack {
     }
 
     /// Drops the card for `id`. The next card comes forward, or the previous one when the last card went. Removing the final card gives `.caughtUp`; an unknown id changes nothing.
-    public static func remove(id: Int64, from cards: [StackCard], selection: Int) -> Removal {
+    public static func dropCard(id: Int64, from cards: [StackCard], selection: Int) -> Removal {
         guard let at = cards.firstIndex(where: { $0.id == id }) else {
             return Removal(cards: cards, selection: selection, mode: cards.isEmpty ? .caughtUp : .cards)
         }
@@ -187,16 +187,12 @@ extension FavoritesStack {
 }
 
 extension FavoritesStack {
-    /// The selection one card forward or back. It never wraps and stays in bounds, also for an empty stack.
-    public static func step(count: Int, selection: Int, forward: Bool) -> Int {
-        guard count > 0 else { return 0 }
-        return min(max(selection + (forward ? 1 : -1), 0), count - 1)
-    }
-
     /// What VoiceOver reads for a card: the chat title, the unread count, then the newest message text.
     public static func accessibilityLabel(for card: StackCard) -> String {
         let count = card.unread == 1 ? "1 unread message" : "\(card.unread) unread messages"
         return [card.title, count, card.text].filter { !$0.isEmpty }.joined(separator: ", ")
+    }
+
     /// Applies one incoming message while the stack is open. A chat already in the stack (or waiting in `queued`) gets its count and newest text updated in place, so the order and the selection do not move.
     /// A new favorite chat goes on top with the selection on it, unless the user is replying: then it waits in `queued` so the card being replied to does not change.
     /// `chat` is the chat as the session knows it; its unread count may not include this message yet, so a known card counts one more.
@@ -222,6 +218,8 @@ extension FavoritesStack {
         guard !queued.isEmpty else { return (cards, queued, selection) }
         return (queued.reversed() + cards, [], 0)
     }
+}
+
 /// How the stack changes cards: a slide with a spring normally, a short plain fade when Reduce Motion is on (R12).
 public enum StackMotion: Equatable, Sendable {
     case slide, fade

@@ -59,17 +59,14 @@ struct StackView: View {
         let layers = FavoritesStack.layers(count: model.stackCards.count, selection: model.stackSelection)
         return ZStack {
             ForEach(layers.reversed(), id: \.index) { layer in
-                CardView(card: model.stackCards[layer.index], top: layer.depth == 0, model: model)
+                CardView(card: model.stackCards[layer.index], top: layer.depth == 0, model: model, close: close)
                     .contentShape(RoundedRectangle(cornerRadius: 16))
                     .onTapGesture { if layer.depth > 0 { select(layer.index) } }   // click a peeking card to bring it up
-                CardView(card: model.stackCards[layer.index], top: layer.depth == 0, model: model, close: close)
                     .scaleEffect(1 - CGFloat(layer.depth) * 0.05, anchor: .top)
                     .offset(y: CGFloat(layer.depth) * 14)
                     .opacity(1 - Double(layer.depth) * 0.12)
                     .zIndex(Double(-layer.depth))
-                    .transition(reduceMotion ? .opacity : .asymmetric(insertion: .opacity, removal: .move(edge: .leading).combined(with: .opacity)))
                     .transition(!motion.moves ? .opacity : .asymmetric(insertion: .opacity, removal: .move(edge: .leading).combined(with: .opacity)))
-                    .allowsHitTesting(layer.depth == 0)
             }
         }
         .padding(.horizontal, 24).padding(.bottom, 40).padding(.top, 20)

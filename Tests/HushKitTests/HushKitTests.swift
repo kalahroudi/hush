@@ -317,13 +317,13 @@ final class ShortcutTests: XCTestCase {
     func testStackRemoveMovesSelectionAndReportsCaughtUp() {
         func card(_ id: Int64) -> StackCard { StackCard(id: id, title: "", unread: 1, lines: [], sender: "", text: "", date: nil) }
         let cards = [card(1), card(2), card(3)]
-        let mid = FavoritesStack.remove(id: 2, from: cards, selection: 1)
+        let mid = FavoritesStack.dropCard(id: 2, from: cards, selection: 1)
         XCTAssertEqual(mid.cards.map(\.id), [1, 3]); XCTAssertEqual(mid.selection, 1, "the next card comes forward"); XCTAssertEqual(mid.mode, .cards)
-        let last = FavoritesStack.remove(id: 3, from: cards, selection: 2)
+        let last = FavoritesStack.dropCard(id: 3, from: cards, selection: 2)
         XCTAssertEqual(last.selection, 1, "the previous card when the last one went")
-        XCTAssertEqual(FavoritesStack.remove(id: 1, from: cards, selection: 2).selection, 1, "a card before the selection shifts it")
-        XCTAssertEqual(FavoritesStack.remove(id: 9, from: cards, selection: 1).cards, cards)
-        let done = FavoritesStack.remove(id: 1, from: [card(1)], selection: 0)
+        XCTAssertEqual(FavoritesStack.dropCard(id: 1, from: cards, selection: 2).selection, 1, "a card before the selection shifts it")
+        XCTAssertEqual(FavoritesStack.dropCard(id: 9, from: cards, selection: 1).cards, cards)
+        let done = FavoritesStack.dropCard(id: 1, from: [card(1)], selection: 0)
         XCTAssertTrue(done.cards.isEmpty); XCTAssertEqual(done.mode, .caughtUp); XCTAssertEqual(done.selection, 0)
     }
     func testStackStepMovesByOneWithoutWrapping() {
@@ -362,6 +362,8 @@ final class ShortcutTests: XCTestCase {
             XCTAssertEqual(FavoritesStack.step(count: 0, selection: 0, forward: forward), 0)
             XCTAssertEqual(FavoritesStack.step(count: 1, selection: 0, forward: forward), 0)
         }
+    }
+
     func testStackMotionFadesWhenReduceMotionIsOn() {
         XCTAssertEqual(StackMotion.resolve(reduceMotion: true), .fade)
         XCTAssertEqual(StackMotion.resolve(reduceMotion: false), .slide)
