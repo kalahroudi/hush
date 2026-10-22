@@ -60,6 +60,7 @@ struct StackView: View {
                 CardView(card: model.stackCards[layer.index], top: layer.depth == 0, model: model)
                     .contentShape(RoundedRectangle(cornerRadius: 16))
                     .onTapGesture { if layer.depth > 0 { select(layer.index) } }   // click a peeking card to bring it up
+                CardView(card: model.stackCards[layer.index], top: layer.depth == 0, model: model, close: close)
                     .scaleEffect(1 - CGFloat(layer.depth) * 0.05, anchor: .top)
                     .offset(y: CGFloat(layer.depth) * 14)
                     .opacity(1 - Double(layer.depth) * 0.12)
@@ -95,6 +96,7 @@ struct StackView: View {
         let card: StackCard
         let top: Bool
         let model: AppModel
+        var close: () -> Void
         private var draft: Binding<String> {
             let id = card.id
             return Binding(get: { model.draftMessages[id] ?? "" }, set: { model.draftMessages[id] = $0.isEmpty ? nil : $0 })
@@ -130,7 +132,27 @@ struct StackView: View {
             .overlay(RoundedRectangle(cornerRadius: 16).stroke(Theme.hairline))
             .shadow(color: .black.opacity(top ? 0.25 : 0.12), radius: top ? 18 : 8, y: top ? 8 : 3)
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel("\(card.title), \(card.unread) unread. \(card.text)")
+            .accessibilityLabel(FavoritesStack.accessibilityLabel(for: card))
+            .modifier(CardActions(enabled: top, model: model, close: close))
+        }
+
+        /// The card's actions for the VoiceOver actions rotor; only the top card has any.
+        struct CardActions: ViewModifier {
+            let enabled: Bool
+            let model: AppModel
+            var close: () -> Void
+            func body(content: Content) -> some View {
+                if enabled {
+                    content
+                        .accessibilityAction(named: "Next card") { model.stepStack(forward: true) }
+                        .accessibilityAction(named: "Previous card") { model.stepStack(forward: false) }
+                        .accessibilityAction(named: "Reply") { model.stackReplying = true }
+                        .accessibilityAction(named: "Mark read") { model.markStackDone() }
+                        .accessibilityAction(named: "Close") { close() }
+                } else {
+                    content
+                }
+            }
         }
 
         /// A tap on the placeholder, or Return on the stack, swaps it for the compose field, which takes focus when it appears.
