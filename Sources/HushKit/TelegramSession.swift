@@ -187,6 +187,26 @@ public final class TelegramSession {
         c.send(["@type": "viewMessages", "chat_id": chatId, "message_ids": [last.id], "force_read": true])
     }
 
+    /// Marks a chat read without opening it, using the same `viewMessages` request as `open`.
+    public func markRead(chatId: Int64) async throws {
+        guard let c = client else { throw TDError(code: 0, message: "Not connected to Telegram.") }
+        guard let last = try await history(chatId: chatId, limit: 1).last else { return }
+        c.send(["@type": "viewMessages", "chat_id": chatId, "message_ids": [last.id], "force_read": true])
+    }
+
+    /// The last `count` incoming lines, oldest first. Reads history only, so nothing is marked read and no chat is opened.
+    public func unreadLines(chatId: Int64, count: Int) async throws -> [Line] {
+        guard count > 0 else { return [] }
+        // Outgoing lines can sit among the unread ones, so fetch extra before filtering.
+        let l = try await history(chatId: chatId, limit: count + 20)
+        return Self.lastIncoming(l, count: count)
+    }
+
+    nonisolated static func lastIncoming(_ lines: [Line], count: Int) -> [Line] {
+        guard count > 0 else { return [] }
+        return Array(lines.filter { !$0.outgoing }.suffix(count))
+    }
+
     /// Oldest first. Does not mark anything as read, so agents can look without side effects.
     public func history(chatId: Int64, limit: Int) async throws -> [Line] {
         guard let c = client else { throw TDError(code: 0, message: "Not connected to Telegram.") }
