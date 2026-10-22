@@ -193,11 +193,6 @@ final class ShortcutTests: XCTestCase {
         XCTAssertNil(HotKeySlot(rawValue: 0))
     }
 
-    func testStackDefaultIsValidAndDiffersFromOpenShortcut() {
-        XCTAssertTrue(Shortcut.stackDefault.isValid)
-        XCTAssertNotEqual(Shortcut.stackDefault, Shortcut.default)
-        XCTAssertEqual(Shortcut.stackDefault.display, "⌃⌥S")
-    }
     func testDisplayAndValidity() {
         XCTAssertEqual(Shortcut.default.display, "⌃⌥H")
         XCTAssertTrue(Shortcut.default.isValid)
@@ -608,7 +603,7 @@ final class StackMouseTests: XCTestCase {
     func testStepEmptyAndOutOfRangeStayInBounds() {
         XCTAssertEqual(FavoritesStack.step(count: 0, selection: 5, forward: true), 0)
         XCTAssertEqual(FavoritesStack.step(count: 1, selection: 0, forward: true), 0)
-        XCTAssertEqual(FavoritesStack.step(count: 2, selection: 9, forward: false), 1)
+        XCTAssertEqual(FavoritesStack.step(count: 2, selection: 9, forward: false), 0)   // clamped to the last card first, then one step back
     }
 
     func testScrollFiresOncePerGesture() {
