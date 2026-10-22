@@ -68,6 +68,12 @@ struct SettingsPane: View {
                 SettingsGroup("Shortcut") {
                     SettingRow("Open Hush", "Show or hide the popover from anywhere. Click the box, then press the keys.", error: prefs.shortcutError) { ShortcutRecorder() }
                 }
+                SettingsGroup("Keyboard") {
+                    SettingRow("Move through chats", "Up and Down arrows move the highlight in the chat list. They stop at the first and last chat.") { Keys("↑  ↓") }
+                    SettingRow("Open the highlighted chat", "Return opens the chat you highlighted.") { Keys("Return") }
+                    SettingRow("Next or previous chat", "Opens the chat below or above the current one and wraps around at the ends. Works from the message box too. In the popover, Tab opens the first chat and Shift+Tab the last.") { Keys("Tab  ⇧Tab") }
+                    SettingRow("Send a message", "Type in the box and press Return.") { Keys("Return") }
+                }
                 SettingsGroup("Startup") {
                     SettingRow("Launch at login", "Adds Hush to Login Items. Turn it off any time.", error: prefs.launchAtLoginError) { Toggle("", isOn: Binding(get: { prefs.launchAtLogin }, set: { prefs.setLaunchAtLogin($0) })).labelsHidden().toggleStyle(.switch).tint(Theme.accent) }
                 }
@@ -114,6 +120,17 @@ struct SettingsPane: View {
                 Link("Report an issue", destination: URL(string: "https://github.com/kalahroudi/hush/issues")!)
             }.font(.system(size: 13))
         }
+    }
+}
+
+/// A key hint shown at the right of a settings row.
+struct Keys: View {
+    let text: String
+    init(_ t: String) { text = t }
+    var body: some View {
+        Text(text).font(.system(size: 12, design: .monospaced)).foregroundStyle(.secondary)
+            .padding(.horizontal, 8).padding(.vertical, 3)
+            .overlay(RoundedRectangle(cornerRadius: 5).stroke(Theme.hairline))
     }
 }
 
