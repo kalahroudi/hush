@@ -65,3 +65,10 @@ extension FavoritesStack {
         return (top..<min(count, top + visibleDepth)).map { ($0, $0 - top) }
     }
 }
+
+extension FavoritesStack {
+    /// The chat a reply typed on the top card goes to: the selected card's chat, or nil when there is no such card.
+    public static func replyTarget(cards: [StackCard], selection: Int) -> Int64? {
+        cards.indices.contains(selection) ? cards[selection].id : nil
+    }
+}
