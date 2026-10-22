@@ -228,6 +228,51 @@ final class ShortcutTests: XCTestCase {
         XCTAssertEqual(ChatListFilter.unreadBadge(chats), 1, "muted chats do not count")
     }
 
+    func testFavoritesStackKeepsOnlyUnreadFavorites() {
+        let now = Date()
+        let chats = [
+            ChatSummary(id: 1, title: "Fav unread", lastText: "hi", lastDate: now, unread: 2),
+            ChatSummary(id: 2, title: "Fav read", lastText: "old", lastDate: now, unread: 0),
+            ChatSummary(id: 3, title: "Other unread", lastText: "spam", lastDate: now, unread: 4),
+            ChatSummary(id: 4, title: "Other read", lastDate: now),
+        ]
+        let cards = FavoritesStack.build(chats: chats, isFavorite: { $0 == 1 || $0 == 2 }, lines: { _ in [] })
+        XCTAssertEqual(cards.map(\.id), [1])
+        XCTAssertTrue(FavoritesStack.build(chats: [], isFavorite: { _ in true }, lines: { _ in [] }).isEmpty)
+        XCTAssertTrue(FavoritesStack.build(chats: chats, isFavorite: { _ in false }, lines: { _ in [] }).isEmpty)
+    }
+
+    func testFavoritesStackCardCarriesTitleSenderTextTimeAndCount() {
+        let t = Date(timeIntervalSince1970: 1_000)
+        let chats = [ChatSummary(id: 1, title: "Team", lastText: "second", lastDate: t.addingTimeInterval(60), unread: 2)]
+        let all = [Line(id: 11, date: t, sender: "Ann", text: "first", outgoing: false),
+                   Line(id: 12, date: t.addingTimeInterval(60), sender: "Bob", text: "second", outgoing: false)]
+        let card = FavoritesStack.build(chats: chats, isFavorite: { _ in true }, lines: { _ in all })[0]
+        XCTAssertEqual(card.title, "Team"); XCTAssertEqual(card.unread, 2)
+        XCTAssertEqual(card.sender, "Bob"); XCTAssertEqual(card.text, "second"); XCTAssertEqual(card.date, t.addingTimeInterval(60))
+        // No lines loaded: fall back to the chat's last message.
+        let bare = FavoritesStack.build(chats: chats, isFavorite: { _ in true }, lines: { _ in [] })[0]
+        XCTAssertEqual(bare.text, "second"); XCTAssertEqual(bare.sender, ""); XCTAssertEqual(bare.date, t.addingTimeInterval(60))
+    }
+
+    func testFavoritesStackOrdersCardsNewestFirstAndLinesChronologically() {
+        let t = Date(timeIntervalSince1970: 1_000)
+        let chats = [
+            ChatSummary(id: 1, title: "a", lastDate: t, unread: 1, order: 5),
+            ChatSummary(id: 2, title: "b", lastDate: t.addingTimeInterval(100), unread: 1),
+            ChatSummary(id: 3, title: "c", lastDate: t, unread: 1, order: 9),
+            ChatSummary(id: 4, title: "d", lastDate: nil, unread: 1),
+        ]
+        let cards = FavoritesStack.build(chats: chats, isFavorite: { _ in true }, lines: { _ in [] })
+        XCTAssertEqual(cards.map(\.id), [2, 3, 1, 4], "newest first, ties by order, undated last")
+        let shuffled = [Line(id: 3, date: t.addingTimeInterval(20), sender: "x", text: "3", outgoing: false),
+                        Line(id: 1, date: t, sender: "x", text: "1", outgoing: false),
+                        Line(id: 2, date: t.addingTimeInterval(10), sender: "x", text: "2", outgoing: false)]
+        let card = FavoritesStack.build(chats: [chats[0]], isFavorite: { _ in true }, lines: { _ in shuffled })[0]
+        XCTAssertEqual(card.lines.map(\.text), ["1", "2", "3"])
+        XCTAssertEqual(card.text, "3")
+    }
+
     func testChatNavigationStepFollowsDisplayedOrderWithoutWrap() {
         let chats = [1, 2, 3].map { ChatSummary(id: Int64($0), title: "c\($0)") }
         XCTAssertEqual(ChatNavigation.step(chats, from: 1, forward: true, wrap: false)?.id, 2)
