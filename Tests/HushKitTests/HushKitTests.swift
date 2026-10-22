@@ -325,6 +325,48 @@ final class ShortcutTests: XCTestCase {
         XCTAssertEqual(FavoritesStack.mode(for: [card]), .cards)
     }
 
+    func testFavoritesStackMergeUpdatesExistingCardsAndQueuesNewChatsWhileReplying() {
+        let t = Date(timeIntervalSince1970: 1_000)
+        let fav: (Int64) -> Bool = { $0 != 9 }
+        let none: (Int64) -> [Line] = { _ in [] }
+        var chats = [ChatSummary(id: 1, title: "a", lastText: "one", lastDate: t, unread: 1),
+                     ChatSummary(id: 2, title: "b", lastText: "two", lastDate: t.addingTimeInterval(-10), unread: 1)]
+        let start = FavoritesStack.build(chats: chats, isFavorite: fav, lines: none)
+        XCTAssertEqual(start.map(\.id), [1, 2])
+
+        // An incoming message for a card in the stack updates its count and text, in place, even mid-reply.
+        chats[1].unread = 3; chats[1].lastText = "newer"; chats[1].lastDate = t.addingTimeInterval(50)
+        let updated = FavoritesStack.merge(cards: start, selection: 1, chats: chats, isFavorite: fav, lines: none, isReplying: true)
+        XCTAssertEqual(updated.cards.map(\.id), [1, 2], "no reorder")
+        XCTAssertEqual(updated.cards[1].unread, 3); XCTAssertEqual(updated.cards[1].text, "newer")
+        XCTAssertEqual(updated.selection, 1)
+
+        // A new favorite chat is queued while replying; non-favorites and read chats never join.
+        chats += [ChatSummary(id: 3, title: "c", lastText: "hey", lastDate: t.addingTimeInterval(60), unread: 1),
+                  ChatSummary(id: 9, title: "x", lastDate: t.addingTimeInterval(70), unread: 1),
+                  ChatSummary(id: 4, title: "d", lastDate: t.addingTimeInterval(80))]
+        let held = FavoritesStack.merge(cards: updated.cards, selection: 1, chats: chats, isFavorite: fav, lines: none, isReplying: true)
+        XCTAssertEqual(held.cards, updated.cards, "the stack is untouched while replying")
+        XCTAssertEqual(held.queued.map(\.id), [3])
+        XCTAssertEqual(held.selection, 1)
+
+        // A queued chat that gets another message stays queued once; it is not duplicated.
+        chats[2].unread = 2
+        let again = FavoritesStack.merge(cards: held.cards, queued: held.queued, selection: 1, chats: chats, isFavorite: fav, lines: none, isReplying: true)
+        XCTAssertEqual(again.queued.map(\.id), [3]); XCTAssertEqual(again.queued[0].unread, 2)
+
+        // When the reply ends the queue lands on top and the selection keeps following the same card.
+        let flushed = FavoritesStack.merge(cards: again.cards, queued: again.queued, selection: 1, chats: chats, isFavorite: fav, lines: none, isReplying: false)
+        XCTAssertEqual(flushed.cards.map(\.id), [3, 1, 2]); XCTAssertTrue(flushed.queued.isEmpty)
+        XCTAssertEqual(flushed.selection, 2); XCTAssertEqual(flushed.cards[flushed.selection].id, 2)
+
+        // Not replying: a new chat goes straight on top, newest first.
+        chats += [ChatSummary(id: 5, title: "e", lastText: "yo", lastDate: t.addingTimeInterval(90), unread: 1)]
+        let direct = FavoritesStack.merge(cards: start, selection: 0, chats: chats, isFavorite: fav, lines: none, isReplying: false)
+        XCTAssertEqual(direct.cards.map(\.id), [5, 3, 1, 2]); XCTAssertEqual(direct.cards[direct.selection].id, 1)
+        XCTAssertEqual(FavoritesStack.merge(cards: [], selection: 0, chats: [], isFavorite: fav, lines: none, isReplying: false).cards, [])
+    }
+
     func testChatNavigationStepFollowsDisplayedOrderWithoutWrap() {
         let chats = [1, 2, 3].map { ChatSummary(id: Int64($0), title: "c\($0)") }
         XCTAssertEqual(ChatNavigation.step(chats, from: 1, forward: true, wrap: false)?.id, 2)
