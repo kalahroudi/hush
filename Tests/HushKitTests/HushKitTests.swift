@@ -269,6 +269,12 @@ final class ShortcutTests: XCTestCase {
         XCTAssertEqual(ChatListFilter.unreadBadge(chats), 1, "muted chats do not count")
     }
 
+    func testStackOpensEmptyWithoutCardsAndWithCardsOtherwise() {
+        XCTAssertEqual(StackMode.opening(with: []), .empty)
+        let card = StackCard(id: 1, title: "A", unread: 1, lines: [], sender: "", text: "hi", date: nil)
+        XCTAssertEqual(StackMode.opening(with: [card]), .cards)
+    }
+
     func testFavoritesStackKeepsOnlyUnreadFavorites() {
         let now = Date()
         let chats = [
