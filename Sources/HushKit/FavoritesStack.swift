@@ -72,3 +72,24 @@ extension FavoritesStack {
         cards.indices.contains(selection) ? cards[selection].id : nil
     }
 }
+
+extension FavoritesStack {
+    /// The stack after a card was handled: the remaining cards, where the selection sits, and what to show.
+    public struct Removal: Equatable, Sendable {
+        public var cards: [StackCard]
+        public var selection: Int
+        public var mode: StackMode
+    }
+
+    /// Drops the card for `id`. The next card comes forward, or the previous one when the last card went. Removing the final card gives `.caughtUp`; an unknown id changes nothing.
+    public static func remove(id: Int64, from cards: [StackCard], selection: Int) -> Removal {
+        guard let at = cards.firstIndex(where: { $0.id == id }) else {
+            return Removal(cards: cards, selection: selection, mode: cards.isEmpty ? .caughtUp : .cards)
+        }
+        var rest = cards; rest.remove(at: at)
+        guard !rest.isEmpty else { return Removal(cards: rest, selection: 0, mode: .caughtUp) }
+        var next = selection
+        if at < selection { next -= 1 }
+        return Removal(cards: rest, selection: min(max(next, 0), rest.count - 1), mode: .cards)
+    }
+}

@@ -114,15 +114,32 @@ final class AppModel {
         stackMode = StackMode.opening(with: stackCards)
     }
 
-    /// Sends the draft typed on the top card to that card's chat. The draft comes back if sending fails.
+    /// Sends the draft typed on the top card to that card's chat, then marks the chat read and drops its card.
+    /// The draft comes back and the card stays if sending fails.
     func sendStackReply() {
         guard let id = FavoritesStack.replyTarget(cards: stackCards, selection: stackSelection),
               let text = draftMessages[id], !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         draftMessages[id] = nil
         Task {
             do { try await session.send(text, to: id) }
-            catch { draftMessages[id] = text; report(error, area: "Sending a message") }
+            catch { draftMessages[id] = text; report(error, area: "Sending a message"); return }
+            await finishStackCard(id)
         }
+    }
+
+    /// "Done": marks the top card's chat read without replying and drops its card.
+    func markStackDone() {
+        guard let id = FavoritesStack.replyTarget(cards: stackCards, selection: stackSelection) else { return }
+        Task { await finishStackCard(id) }
+    }
+
+    /// Marks the chat read through the same path the main window uses, then removes its card. A failed mark keeps the card.
+    private func finishStackCard(_ id: Int64) async {
+        do { try await session.markRead(chatId: id) }
+        catch { report(error, area: "Marking a chat read"); return }
+        let r = FavoritesStack.remove(id: id, from: stackCards, selection: stackSelection)
+        stackCards = r.cards; stackSelection = r.selection; stackMode = r.mode
+        stackReplying = false
     }
 
     // MARK: Banners (favorites only)
