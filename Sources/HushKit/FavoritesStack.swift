@@ -65,3 +65,31 @@ extension FavoritesStack {
         return (top..<min(count, top + visibleDepth)).map { ($0, $0 - top) }
     }
 }
+
+extension FavoritesStack {
+    /// The selection after moving one card `forward` or back. It never wraps and always stays inside `0..<count` (0 when empty).
+    public static func step(count: Int, selection: Int, forward: Bool) -> Int {
+        guard count > 0 else { return 0 }
+        return min(max(selection + (forward ? 1 : -1), 0), count - 1)
+    }
+}
+
+/// Turns a stream of scroll or swipe deltas into one card step per gesture, so trackpad inertia cannot skip through the stack.
+public struct StackScroll: Equatable, Sendable {
+    public static let threshold: Double = 12
+    private var total: Double = 0
+    private var fired = false
+    public init() {}
+
+    /// Adds a delta (positive = next card). Returns `true` for next, `false` for previous, nil until the threshold is crossed, and nil again until `end()`.
+    public mutating func add(_ delta: Double) -> Bool? {
+        guard !fired else { return nil }
+        total += delta
+        guard abs(total) >= Self.threshold else { return nil }
+        fired = true
+        return total > 0
+    }
+
+    /// The gesture and its momentum finished: the next delta starts a new gesture.
+    public mutating func end() { self = StackScroll() }
+}

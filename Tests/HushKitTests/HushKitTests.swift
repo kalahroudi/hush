@@ -446,3 +446,33 @@ final class UnreadLinesTests: XCTestCase {
         XCTAssertEqual(none, [])
     }
 }
+
+
+final class StackMouseTests: XCTestCase {
+    func testStepMovesByOneWithoutWrapping() {
+        XCTAssertEqual(FavoritesStack.step(count: 3, selection: 0, forward: true), 1)
+        XCTAssertEqual(FavoritesStack.step(count: 3, selection: 2, forward: true), 2)
+        XCTAssertEqual(FavoritesStack.step(count: 3, selection: 0, forward: false), 0)
+        XCTAssertEqual(FavoritesStack.step(count: 3, selection: 2, forward: false), 1)
+    }
+
+    func testStepEmptyAndOutOfRangeStayInBounds() {
+        XCTAssertEqual(FavoritesStack.step(count: 0, selection: 5, forward: true), 0)
+        XCTAssertEqual(FavoritesStack.step(count: 1, selection: 0, forward: true), 0)
+        XCTAssertEqual(FavoritesStack.step(count: 2, selection: 9, forward: false), 1)
+    }
+
+    func testScrollFiresOncePerGesture() {
+        var s = StackScroll()
+        XCTAssertNil(s.add(5))
+        XCTAssertEqual(s.add(8), true)          // crossed the threshold: next
+        XCTAssertNil(s.add(30))                  // inertia of the same gesture is ignored
+        s.end()
+        XCTAssertEqual(s.add(-20), false)        // a new gesture goes to the previous card
+    }
+
+    func testScrollSmallJitterDoesNothing() {
+        var s = StackScroll()
+        XCTAssertNil(s.add(4)); XCTAssertNil(s.add(-4)); XCTAssertNil(s.add(3))
+    }
+}
