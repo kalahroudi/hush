@@ -362,6 +362,12 @@ final class ShortcutTests: XCTestCase {
             XCTAssertEqual(FavoritesStack.step(count: 0, selection: 0, forward: forward), 0)
             XCTAssertEqual(FavoritesStack.step(count: 1, selection: 0, forward: forward), 0)
         }
+    func testStackMotionFadesWhenReduceMotionIsOn() {
+        XCTAssertEqual(StackMotion.resolve(reduceMotion: true), .fade)
+        XCTAssertEqual(StackMotion.resolve(reduceMotion: false), .slide)
+        XCTAssertFalse(StackMotion.fade.moves, "a fade never slides cards")
+        XCTAssertTrue(StackMotion.slide.moves)
+        XCTAssertLessThan(StackMotion.fade.duration, StackMotion.slide.duration)
     }
 
     func testStackOpensEmptyWithoutCardsAndWithCardsOtherwise() {

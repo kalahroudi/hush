@@ -222,4 +222,14 @@ extension FavoritesStack {
         guard !queued.isEmpty else { return (cards, queued, selection) }
         return (queued.reversed() + cards, [], 0)
     }
+/// How the stack changes cards: a slide with a spring normally, a short plain fade when Reduce Motion is on (R12).
+public enum StackMotion: Equatable, Sendable {
+    case slide, fade
+
+    public static func resolve(reduceMotion: Bool) -> StackMotion { reduceMotion ? .fade : .slide }
+
+    /// Seconds a card change takes. A fade is short and has no spring.
+    public var duration: Double { self == .fade ? 0.15 : 0.3 }
+    /// Whether outgoing cards travel across the window. A fade keeps every card in place.
+    public var moves: Bool { self == .slide }
 }
