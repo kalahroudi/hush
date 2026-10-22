@@ -73,6 +73,8 @@ struct SettingsPane: View {
                     SettingRow("Open the highlighted chat", "Return opens the chat you highlighted.") { Keys("Return") }
                     SettingRow("Next or previous chat", "Opens the chat below or above the current one and wraps around at the ends. Works from the message box too. In the popover, Tab opens the first chat and Shift+Tab the last.") { Keys("Tab  ⇧Tab") }
                     SettingRow("Send a message", "Type in the box and press Return.") { Keys("Return") }
+                    SettingRow("Favorites stack", "Open the stack of unread messages from your favorite chats from anywhere. The default is Control+Option+S.") { Keys("⌃⌥S") }
+                    SettingRow("Move through the stack", "Down and Right go to the next card, Up and Left to the previous one. The stack does not wrap. Esc closes it.") { Keys("↓ → ↑ ←  Esc") }
                 }
                 SettingsGroup("Startup") {
                     SettingRow("Launch at login", "Adds Hush to Login Items. Turn it off any time.", error: prefs.launchAtLoginError) { Toggle("", isOn: Binding(get: { prefs.launchAtLogin }, set: { prefs.setLaunchAtLogin($0) })).labelsHidden().toggleStyle(.switch).tint(Theme.accent) }
