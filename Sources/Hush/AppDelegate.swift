@@ -105,6 +105,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
         let screen = NSScreen.screens.first { NSMouseInRect(NSEvent.mouseLocation, $0.frame, false) } ?? NSScreen.main
         if let f = screen?.visibleFrame { w.setFrameOrigin(NSPoint(x: f.midX - w.frame.width / 2, y: f.midY - w.frame.height / 2)) } else { w.center() }
         stackWindow = w
+        model.stackOpen = true
         NSApp.activate(ignoringOtherApps: true)
         w.makeKeyAndOrderFront(nil)
     }
@@ -205,6 +206,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
         if closing === stackWindow {
             stackWindow?.contentView = nil
             stackWindow = nil
+            model.stackOpen = false
+            model.stackReplying = false
             previousApp?.activate()   // hand the keyboard back to whatever the user was in
             previousApp = nil
             return

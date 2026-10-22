@@ -58,7 +58,13 @@ final class AppModel {
     var stackSelection = 0
     var stackMode = StackMode.empty
     /// True while the reply field on the top card has focus or a send is running.
-    var stackReplying = false
+    var stackReplying = false {
+        didSet { if !stackReplying { flushStackQueue() } }
+    }
+    /// True while the stack window is on screen; incoming messages only update the stack then.
+    var stackOpen = false
+    /// New favorite chats that arrived during a reply. They join the stack when the reply ends.
+    private var stackQueued: [StackCard] = []
 
     private var popoverVisible = false
 
@@ -88,6 +94,7 @@ final class AppModel {
         guard !needsSetup else { return }
         session.onIncoming = { [weak self] chat, text in self?.banner(chat, text) }
         // Sign-in typos show inline; the log keeps every failure so a report has the full picture.
+        session.onIncomingLine = { [weak self] chat, line in self?.stackIncoming(chat, line) }
         session.onError = { [weak self] e in self?.record(AppProblem.from(e, area: "Telegram")) }
         session.start()
     }
@@ -111,7 +118,25 @@ final class AppModel {
         }
         stackCards = FavoritesStack.build(chats: session.chats, isFavorite: { self.settings.isFavorite($0) }, lines: { fetched[$0] ?? [] })
         stackSelection = 0
+        stackQueued = []
         stackMode = StackMode.opening(with: stackCards)
+    }
+
+    /// Updates the open stack with a message that just arrived in a favorite chat.
+    private func stackIncoming(_ chat: ChatSummary, _ line: Line) {
+        guard stackOpen, settings.isFavorite(chat.id) else { return }
+        let r = FavoritesStack.merge(cards: stackCards, queued: stackQueued, selection: stackSelection, chat: chat, line: line, isReplying: stackReplying)
+        applyStack(r)
+    }
+
+    private func flushStackQueue() {
+        guard stackOpen else { return }
+        applyStack(FavoritesStack.flush(cards: stackCards, queued: stackQueued, selection: stackSelection))
+    }
+
+    private func applyStack(_ r: (cards: [StackCard], queued: [StackCard], selection: Int)) {
+        stackCards = r.cards; stackQueued = r.queued; stackSelection = r.selection
+        if !stackCards.isEmpty { stackMode = .cards }
     }
 
     /// Sends the draft typed on the top card to that card's chat. The draft comes back if sending fails.

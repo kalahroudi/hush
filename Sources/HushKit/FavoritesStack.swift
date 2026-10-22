@@ -72,3 +72,31 @@ extension FavoritesStack {
         cards.indices.contains(selection) ? cards[selection].id : nil
     }
 }
+
+extension FavoritesStack {
+    /// Applies one incoming message while the stack is open. A chat already in the stack (or waiting in `queued`) gets its count and newest text updated in place, so the order and the selection do not move.
+    /// A new favorite chat goes on top with the selection on it, unless the user is replying: then it waits in `queued` so the card being replied to does not change.
+    /// `chat` is the chat as the session knows it; its unread count may not include this message yet, so a known card counts one more.
+    public static func merge(cards: [StackCard], queued: [StackCard], selection: Int, chat: ChatSummary, line: Line, isReplying: Bool)
+        -> (cards: [StackCard], queued: [StackCard], selection: Int) {
+        func apply(_ card: inout StackCard) {
+            guard !card.lines.contains(where: { $0.id == line.id }) else { return }
+            card.unread += 1
+            card.lines.append(line)
+            card.sender = line.sender; card.text = line.text; card.date = line.date
+        }
+        var cards = cards, queued = queued
+        if let i = cards.firstIndex(where: { $0.id == chat.id }) { apply(&cards[i]); return (cards, queued, selection) }
+        if let i = queued.firstIndex(where: { $0.id == chat.id }) { apply(&queued[i]); return (cards, queued, selection) }
+        let card = StackCard(id: chat.id, title: chat.title, unread: max(chat.unread, 1), lines: [line],
+                             sender: line.sender, text: line.text, date: line.date)
+        if isReplying { queued.append(card); return (cards, queued, selection) }
+        return ([card] + cards, queued, 0)
+    }
+
+    /// Brings the queued chats onto the stack once the reply ends. The newest queued chat ends up on top and the selection moves to it.
+    public static func flush(cards: [StackCard], queued: [StackCard], selection: Int) -> (cards: [StackCard], queued: [StackCard], selection: Int) {
+        guard !queued.isEmpty else { return (cards, queued, selection) }
+        return (queued.reversed() + cards, [], 0)
+    }
+}
