@@ -16,6 +16,18 @@ public struct StackCard: Identifiable, Equatable, Sendable {
     }
 }
 
+/// What the stack window shows: cards, or one of two short messages.
+public enum StackMode: Equatable, Sendable {
+    case cards
+    /// Every card was handled.
+    case caughtUp
+    /// There was nothing fresh when the stack was invoked.
+    case empty
+
+    /// The mode a freshly built stack opens in: an empty stack never shows cards.
+    public static func opening(with cards: [StackCard]) -> StackMode { cards.isEmpty ? .empty : .cards }
+}
+
 /// Which cards the favorites stack shows and in what order. Pure, like `ChatListFilter`, so it is tested without a session.
 public enum FavoritesStack {
     /// One card per favorite chat with unread messages, most recent activity first. Ties follow Telegram's `order` (higher first), then id, so the result is deterministic.

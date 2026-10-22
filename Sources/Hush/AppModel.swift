@@ -53,6 +53,11 @@ final class AppModel {
     var draftPassword = ""
     var draftMessages: [Int64: String] = [:]
 
+    /// The favorites stack: one card per favorite chat with unread messages, newest activity first.
+    var stackCards: [StackCard] = []
+    var stackSelection = 0
+    var stackMode = StackMode.empty
+
     private var popoverVisible = false
 
     var settings: Prefs { Prefs.shared }
@@ -89,6 +94,22 @@ final class AppModel {
         popoverVisible = v
         if session.phase == .ready { draftCode = ""; draftPassword = ""; draftPhone = "" }   // sign-in finished: forget what was typed
         if v, !demo { setupState = SetupState.detect(); if !needsSetup, session.phase == .stopped { start() } }
+    }
+
+    // MARK: Favorites stack
+
+    /// Builds the stack from the chats Hush has loaded. Unread lines are read from history, which marks nothing read and opens no chat.
+    /// A chat whose history cannot be read still gets a card from its last message, and the failure goes to the error log.
+    func loadStack() async {
+        let chats = session.chats.filter { $0.unread > 0 && settings.isFavorite($0.id) }
+        var fetched: [Int64: [Line]] = [:]
+        for chat in chats {
+            do { fetched[chat.id] = try await session.unreadLines(chatId: chat.id, count: chat.unread) }
+            catch { record(AppProblem.from(error, area: "Telegram")) }
+        }
+        stackCards = FavoritesStack.build(chats: session.chats, isFavorite: { self.settings.isFavorite($0) }, lines: { fetched[$0] ?? [] })
+        stackSelection = 0
+        stackMode = StackMode.opening(with: stackCards)
     }
 
     // MARK: Banners (favorites only)
