@@ -521,3 +521,28 @@ final class ShortcutTests: XCTestCase {
         XCTAssertLessThan(url?.absoluteString.count ?? .max, 8000, "stays within GitHub's URL limit")
     }
 }
+
+final class UnreadLinesTests: XCTestCase {
+    private func line(_ id: Int64, out: Bool = false) -> Line {
+        Line(id: id, date: Date(timeIntervalSince1970: Double(id)), sender: out ? "You" : "A", text: "m\(id)", outgoing: out)
+    }
+
+    func testLastIncomingSkipsOutgoingAndKeepsOrder() {
+        let l = [line(1), line(2, out: true), line(3), line(4), line(5, out: true)]
+        XCTAssertEqual(TelegramSession.lastIncoming(l, count: 2).map(\.id), [3, 4])
+        XCTAssertEqual(TelegramSession.lastIncoming(l, count: 10).map(\.id), [1, 3, 4])
+    }
+
+    func testLastIncomingZeroOrEmpty() {
+        XCTAssertTrue(TelegramSession.lastIncoming([line(1)], count: 0).isEmpty)
+        XCTAssertTrue(TelegramSession.lastIncoming([], count: 3).isEmpty)
+    }
+
+    @MainActor func testMarkReadAndUnreadLinesFailWhenNotConnected() async {
+        let s = TelegramSession()
+        do { try await s.markRead(chatId: 1); XCTFail("expected error") } catch {}
+        do { _ = try await s.unreadLines(chatId: 1, count: 2); XCTFail("expected error") } catch {}
+        let none = try? await s.unreadLines(chatId: 1, count: 0)
+        XCTAssertEqual(none, [])
+    }
+}
