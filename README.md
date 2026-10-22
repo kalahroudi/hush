@@ -53,6 +53,7 @@ Then sign in with your phone number and the code Telegram sends you.
 - **Chats.** Click the icon for your chats, newest first.
 - **Conversation.** Messages read like a log: time, name, text. Photos, voice notes and files appear as a marker such as `[photo]`. Nothing is downloaded.
 - **Typing.** Type and press Return. That is the whole input.
+- **Keyboard.** Up and Down move the highlight in the chat list, Return opens the highlighted chat. Tab and Shift+Tab open the next or previous chat, even while typing in the message box, and wrap around at the ends. In the popover, Tab opens the first chat and Shift+Tab the last. The same list is in Settings under Keyboard.
 - **Banners for favorites.** Star a chat inside its conversation and it shows a banner for new messages. Everything else stays silent. Muted chats never notify.
 
 <p align="center"><img src="docs/assets/thread.png" alt="A conversation as plain text lines" width="420"></p>
