@@ -27,11 +27,21 @@ struct StackView: View {
         .frame(width: 460, height: 360)
         .focusable().focusEffectDisabled()
         .onKeyPress(.escape) { close(); return .handled }
+        .onKeyPress(.downArrow) { move(forward: true) }
+        .onKeyPress(.rightArrow) { move(forward: true) }
+        .onKeyPress(.upArrow) { move(forward: false) }
+        .onKeyPress(.leftArrow) { move(forward: false) }
         .overlay(alignment: .topTrailing) {
             Button(action: close) { Image(systemName: "xmark.circle.fill").font(.system(size: 18)) }
                 .buttonStyle(.plain).foregroundStyle(.secondary).padding(8)
                 .help("Close").accessibilityLabel("Close")
         }
+    }
+
+    private func move(forward: Bool) -> KeyPress.Result {
+        guard model.stackMode == .cards else { return .ignored }
+        model.stepStack(forward: forward)
+        return .handled
     }
 
     private var cards: some View {

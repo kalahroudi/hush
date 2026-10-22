@@ -112,6 +112,12 @@ final class AppModel {
         stackMode = StackMode.opening(with: stackCards)
     }
 
+    /// Moves the stack to the next or previous card, without wrapping.
+    func stepStack(forward: Bool) {
+        guard stackMode == .cards else { return }
+        stackSelection = FavoritesStack.step(count: stackCards.count, selection: stackSelection, forward: forward)
+    }
+
     // MARK: Banners (favorites only)
 
     private func banner(_ chat: ChatSummary, _ text: String) {

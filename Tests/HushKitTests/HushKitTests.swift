@@ -283,6 +283,19 @@ final class ShortcutTests: XCTestCase {
         XCTAssertEqual(FavoritesStack.layers(count: 3, selection: 1).map(\.depth), [0, 1])
     }
 
+    func testStackStepMovesByOneWithoutWrapAndStaysInBounds() {
+        XCTAssertEqual(FavoritesStack.step(count: 3, selection: 0, forward: true), 1)
+        XCTAssertEqual(FavoritesStack.step(count: 3, selection: 2, forward: false), 1)
+        XCTAssertEqual(FavoritesStack.step(count: 3, selection: 2, forward: true), 2, "no wrap at the end")
+        XCTAssertEqual(FavoritesStack.step(count: 3, selection: 0, forward: false), 0, "no wrap at the start")
+        XCTAssertEqual(FavoritesStack.step(count: 3, selection: 9, forward: true), 2, "out of range selection is clamped")
+        XCTAssertEqual(FavoritesStack.step(count: 3, selection: -4, forward: false), 0)
+        for forward in [false, true] {
+            XCTAssertEqual(FavoritesStack.step(count: 0, selection: 0, forward: forward), 0)
+            XCTAssertEqual(FavoritesStack.step(count: 1, selection: 0, forward: forward), 0)
+        }
+    }
+
     func testStackOpensEmptyWithoutCardsAndWithCardsOtherwise() {
         XCTAssertEqual(StackMode.opening(with: []), .empty)
         let card = StackCard(id: 1, title: "A", unread: 1, lines: [], sender: "", text: "hi", date: nil)
