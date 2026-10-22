@@ -165,6 +165,11 @@ final class TDLibTests: XCTestCase {
 }
 
 final class ShortcutTests: XCTestCase {
+    func testStackDefaultIsValidAndDiffersFromOpenShortcut() {
+        XCTAssertTrue(Shortcut.stackDefault.isValid)
+        XCTAssertNotEqual(Shortcut.stackDefault, Shortcut.default)
+        XCTAssertEqual(Shortcut.stackDefault.display, "⌃⌥S")
+    }
     func testDisplayAndValidity() {
         XCTAssertEqual(Shortcut.default.display, "⌃⌥H")
         XCTAssertTrue(Shortcut.default.isValid)
