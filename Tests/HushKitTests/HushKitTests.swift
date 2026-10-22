@@ -249,6 +249,22 @@ final class ShortcutTests: XCTestCase {
         let done = FavoritesStack.remove(id: 1, from: [card(1)], selection: 0)
         XCTAssertTrue(done.cards.isEmpty); XCTAssertEqual(done.mode, .caughtUp); XCTAssertEqual(done.selection, 0)
     }
+    func testStackStepMovesByOneWithoutWrapping() {
+        XCTAssertEqual(FavoritesStack.step(count: 3, selection: 0, forward: true), 1)
+        XCTAssertEqual(FavoritesStack.step(count: 3, selection: 2, forward: true), 2, "no wrap at the end")
+        XCTAssertEqual(FavoritesStack.step(count: 3, selection: 0, forward: false), 0, "no wrap at the start")
+        XCTAssertEqual(FavoritesStack.step(count: 3, selection: 2, forward: false), 1)
+        XCTAssertEqual(FavoritesStack.step(count: 0, selection: 0, forward: true), 0)
+        XCTAssertEqual(FavoritesStack.step(count: 1, selection: 0, forward: false), 0)
+    }
+    func testStackCardAccessibilityLabelHasTitleCountAndText() {
+        let c = StackCard(id: 1, title: "Mom", unread: 3, lines: [], sender: "Mom", text: "Dinner at 7?", date: nil)
+        XCTAssertEqual(FavoritesStack.accessibilityLabel(for: c), "Mom, 3 unread messages, Dinner at 7?")
+        var one = c; one.unread = 1
+        XCTAssertEqual(FavoritesStack.accessibilityLabel(for: one), "Mom, 1 unread message, Dinner at 7?")
+        var bare = c; bare.text = ""
+        XCTAssertEqual(FavoritesStack.accessibilityLabel(for: bare), "Mom, 3 unread messages")
+    }
     func testStackLayersShowTopCardAndPeekingEdges() {
         XCTAssertTrue(FavoritesStack.layers(count: 0, selection: 0).isEmpty)
         XCTAssertEqual(FavoritesStack.layers(count: 1, selection: 0).map(\.depth), [0])

@@ -127,6 +127,12 @@ final class AppModel {
         }
     }
 
+    /// Brings the next or previous card to the top. It does not wrap, and it leaves the card being replied to alone.
+    func stepStack(forward: Bool) {
+        guard stackMode == .cards, !stackReplying else { return }
+        stackSelection = FavoritesStack.step(count: stackCards.count, selection: stackSelection, forward: forward)
+    }
+
     /// "Done": marks the top card's chat read without replying and drops its card.
     func markStackDone() {
         guard let id = FavoritesStack.replyTarget(cards: stackCards, selection: stackSelection) else { return }

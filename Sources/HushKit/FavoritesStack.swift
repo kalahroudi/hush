@@ -93,3 +93,17 @@ extension FavoritesStack {
         return Removal(cards: rest, selection: min(max(next, 0), rest.count - 1), mode: .cards)
     }
 }
+
+extension FavoritesStack {
+    /// The selection one card forward or back. It never wraps and stays in bounds, also for an empty stack.
+    public static func step(count: Int, selection: Int, forward: Bool) -> Int {
+        guard count > 0 else { return 0 }
+        return min(max(selection + (forward ? 1 : -1), 0), count - 1)
+    }
+
+    /// What VoiceOver reads for a card: the chat title, the unread count, then the newest message text.
+    public static func accessibilityLabel(for card: StackCard) -> String {
+        let count = card.unread == 1 ? "1 unread message" : "\(card.unread) unread messages"
+        return [card.title, count, card.text].filter { !$0.isEmpty }.joined(separator: ", ")
+    }
+}
