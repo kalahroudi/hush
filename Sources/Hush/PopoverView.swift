@@ -47,6 +47,9 @@ struct InboxView: View {
     let prefs = Prefs.shared
     var openSettings: () -> Void
     @State private var showAll = false
+    /// The keyboard highlight: arrows move it, Enter opens it. The inbox never has an open chat, so this is its only selection.
+    @State private var highlighted: Int64?
+    @FocusState private var listFocused: Bool
 
     var body: some View {
         // Same ordering and "older" rule as the desktop window: favorites first, quiet chats behind "show all".
@@ -62,10 +65,12 @@ struct InboxView: View {
             if model.session.chats.isEmpty {
                 Spacer(); Text("No chats yet.").font(.system(size: 12.5)).foregroundStyle(.secondary); Spacer()
             } else {
+                ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(spacing: 0) {
                         ForEach(shown) { chat in
-                            Button { model.session.open(chat) } label: { Row(chat: chat, favorite: prefs.isFavorite(chat.id)) }.buttonStyle(RowStyle())
+                            Button { model.session.open(chat) } label: { Row(chat: chat, favorite: prefs.isFavorite(chat.id)) }
+                                .buttonStyle(RowStyle(highlighted: chat.id == highlighted)).id(chat.id)
                         }
                         if hidden > 0 || showAll {
                             Button {
@@ -78,6 +83,11 @@ struct InboxView: View {
                         }
                     }
                 }
+                .focusable().focusEffectDisabled().focused($listFocused)
+                .onKeyPress(phases: .down) { keyPress($0, shown) }
+                .onChange(of: highlighted) { _, id in if let id { proxy.scrollTo(id) } }
+                .onChange(of: shown.map(\.id)) { _, ids in if let h = highlighted, !ids.contains(h) { highlighted = nil } }
+                }
             }
             HStack {
                 Text(hidden > 0 ? "\(shown.count) of \(model.session.chats.count) chats" : "\(shown.count) chats").font(.system(size: 10.5, design: .monospaced))
@@ -85,9 +95,28 @@ struct InboxView: View {
                 Text(model.demo ? "" : AppMemory.footprint).font(.system(size: 10.5, design: .monospaced))
             }.foregroundStyle(.secondary).padding(.horizontal, 14).padding(.vertical, 6).overlay(alignment: .top) { Divider() }
         }
+        .onAppear { listFocused = true }
         .task {
             if let id = model.pendingChat, let c = model.session.chats.first(where: { $0.id == id }) { model.pendingChat = nil; model.session.open(c) }
         }
+    }
+
+    /// Arrows move the highlight without wrapping, Enter opens it, Tab opens the first chat (none is open here), Shift+Tab the last. Ignored while an input method is composing.
+    private func keyPress(_ press: KeyPress, _ shown: [ChatSummary]) -> KeyPress.Result {
+        if (NSApp.keyWindow?.firstResponder as? NSTextInputClient)?.hasMarkedText() == true { return .ignored }
+        switch press.key {
+        case .downArrow, .upArrow:
+            guard let c = ChatNavigation.step(shown, from: highlighted, forward: press.key == .downArrow, wrap: false) else { return .ignored }
+            highlighted = c.id
+        case .return:
+            guard let h = highlighted, let c = shown.first(where: { $0.id == h }) else { return .ignored }
+            model.session.open(c)
+        case .tab:
+            guard let c = ChatNavigation.step(shown, from: nil, forward: !press.modifiers.contains(.shift), wrap: true) else { return .ignored }
+            model.session.open(c)
+        default: return .ignored
+        }
+        return .handled
     }
 
     struct Row: View {
@@ -115,8 +144,10 @@ struct InboxView: View {
 }
 
 struct RowStyle: ButtonStyle {
+    var highlighted = false
     func makeBody(configuration: Configuration) -> some View {
         configuration.label.background(configuration.isPressed ? Theme.accentSoft : .clear)
+            .overlay { if highlighted { Rectangle().strokeBorder(Theme.accent, lineWidth: 1.5) } }
     }
 }
 
