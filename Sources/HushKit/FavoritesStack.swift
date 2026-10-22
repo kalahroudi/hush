@@ -138,14 +138,6 @@ extension FavoritesStack {
     }
 }
 
-extension FavoritesStack {
-    /// The selection after moving one card `forward` or back. It never wraps and always stays inside `0..<count` (0 when empty).
-    public static func step(count: Int, selection: Int, forward: Bool) -> Int {
-        guard count > 0 else { return 0 }
-        return min(max(selection + (forward ? 1 : -1), 0), count - 1)
-    }
-}
-
 /// Turns a stream of scroll or swipe deltas into one card step per gesture, so trackpad inertia cannot skip through the stack.
 public struct StackScroll: Equatable, Sendable {
     public static let threshold: Double = 12
