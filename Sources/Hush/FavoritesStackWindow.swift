@@ -31,7 +31,11 @@ struct StackView: View {
         .onKeyPress(.rightArrow) { move(forward: true) }
         .onKeyPress(.upArrow) { move(forward: false) }
         .onKeyPress(.leftArrow) { move(forward: false) }
-        .background(ScrollCatcher { forward in move(forward: forward) })
+        .background(ScrollCatcher { forward in _ = move(forward: forward) })
+        .onKeyPress(.return) {
+            guard model.stackMode == .cards, !model.stackReplying else { return .ignored }
+            model.stackReplying = true; return .handled
+        }
         .overlay(alignment: .topTrailing) {
             Button(action: close) { Image(systemName: "xmark.circle.fill").font(.system(size: 18)) }
                 .buttonStyle(.plain).foregroundStyle(.secondary).padding(8)
@@ -49,7 +53,7 @@ struct StackView: View {
         let layers = FavoritesStack.layers(count: model.stackCards.count, selection: model.stackSelection)
         return ZStack {
             ForEach(layers.reversed(), id: \.index) { layer in
-                CardView(card: model.stackCards[layer.index], top: layer.depth == 0)
+                CardView(card: model.stackCards[layer.index], top: layer.depth == 0, model: model)
                     .contentShape(RoundedRectangle(cornerRadius: 16))
                     .onTapGesture { if layer.depth > 0 { select(layer.index) } }   // click a peeking card to bring it up
                     .scaleEffect(1 - CGFloat(layer.depth) * 0.05, anchor: .top)
@@ -64,11 +68,6 @@ struct StackView: View {
     }
 
     private func select(_ index: Int) { model.stackSelection = min(max(index, 0), model.stackCards.count - 1) }
-
-    private func move(forward: Bool) {
-        guard model.stackMode == .cards else { return }
-        model.stackSelection = FavoritesStack.step(count: model.stackCards.count, selection: model.stackSelection, forward: forward)
-    }
 
     private func message(_ title: String, _ detail: String, symbol: String) -> some View {
         VStack(spacing: 8) {
@@ -91,6 +90,11 @@ struct StackView: View {
     struct CardView: View {
         let card: StackCard
         let top: Bool
+        let model: AppModel
+        private var draft: Binding<String> {
+            let id = card.id
+            return Binding(get: { model.draftMessages[id] ?? "" }, set: { model.draftMessages[id] = $0.isEmpty ? nil : $0 })
+        }
         var body: some View {
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
@@ -109,6 +113,7 @@ struct StackView: View {
                     Text(card.text).font(.system(size: 14)).lineLimit(8).frame(maxWidth: .infinity, alignment: .leading)
                 }
                 Spacer(minLength: 0)
+                if top { reply }
             }
             .padding(18)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -117,6 +122,21 @@ struct StackView: View {
             .shadow(color: .black.opacity(top ? 0.25 : 0.12), radius: top ? 18 : 8, y: top ? 8 : 3)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("\(card.title), \(card.unread) unread. \(card.text)")
+        }
+
+        /// A tap on the placeholder, or Return on the stack, swaps it for the compose field, which takes focus when it appears.
+        @ViewBuilder private var reply: some View {
+            if model.stackReplying {
+                ComposeField(text: draft, placeholder: "Reply", onSend: model.sendStackReply)
+            } else {
+                Text("Reply…").font(.system(size: 13.5)).foregroundStyle(.secondary)
+                    .padding(.horizontal, 10).padding(.vertical, 7).frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Theme.fill, in: RoundedRectangle(cornerRadius: 9))
+                    .overlay(RoundedRectangle(cornerRadius: 9).stroke(Theme.hairline))
+                    .contentShape(RoundedRectangle(cornerRadius: 9))
+                    .onTapGesture { model.stackReplying = true }
+                    .accessibilityAddTraits(.isButton).accessibilityLabel("Reply")
+            }
         }
     }
 }

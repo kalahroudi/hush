@@ -274,6 +274,15 @@ final class ShortcutTests: XCTestCase {
         XCTAssertEqual(ChatListFilter.unreadBadge(chats), 1, "muted chats do not count")
     }
 
+
+    func testReplyTargetIsTheSelectedCardsChat() {
+        let cards = [StackCard(id: 10, title: "A", unread: 1, lines: [], sender: "", text: "", date: nil),
+                     StackCard(id: 20, title: "B", unread: 1, lines: [], sender: "", text: "", date: nil)]
+        XCTAssertEqual(FavoritesStack.replyTarget(cards: cards, selection: 0), 10)
+        XCTAssertEqual(FavoritesStack.replyTarget(cards: cards, selection: 1), 20)
+        XCTAssertNil(FavoritesStack.replyTarget(cards: cards, selection: 2))
+        XCTAssertNil(FavoritesStack.replyTarget(cards: [], selection: 0))
+    }
     func testStackLayersShowTopCardAndPeekingEdges() {
         XCTAssertTrue(FavoritesStack.layers(count: 0, selection: 0).isEmpty)
         XCTAssertEqual(FavoritesStack.layers(count: 1, selection: 0).map(\.depth), [0])

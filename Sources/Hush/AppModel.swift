@@ -57,6 +57,8 @@ final class AppModel {
     var stackCards: [StackCard] = []
     var stackSelection = 0
     var stackMode = StackMode.empty
+    /// True while the reply field on the top card has focus or a send is running.
+    var stackReplying = false
 
     private var popoverVisible = false
 
@@ -116,6 +118,17 @@ final class AppModel {
     func stepStack(forward: Bool) {
         guard stackMode == .cards else { return }
         stackSelection = FavoritesStack.step(count: stackCards.count, selection: stackSelection, forward: forward)
+    }
+
+    /// Sends the draft typed on the top card to that card's chat. The draft comes back if sending fails.
+    func sendStackReply() {
+        guard let id = FavoritesStack.replyTarget(cards: stackCards, selection: stackSelection),
+              let text = draftMessages[id], !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        draftMessages[id] = nil
+        Task {
+            do { try await session.send(text, to: id) }
+            catch { draftMessages[id] = text; report(error, area: "Sending a message") }
+        }
     }
 
     // MARK: Banners (favorites only)

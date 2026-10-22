@@ -157,3 +157,10 @@ public struct StackScroll: Equatable, Sendable {
     /// The gesture and its momentum finished: the next delta starts a new gesture.
     public mutating func end() { self = StackScroll() }
 }
+
+extension FavoritesStack {
+    /// The chat a reply typed on the top card goes to: the selected card's chat, or nil when there is no such card.
+    public static func replyTarget(cards: [StackCard], selection: Int) -> Int64? {
+        cards.indices.contains(selection) ? cards[selection].id : nil
+    }
+}
