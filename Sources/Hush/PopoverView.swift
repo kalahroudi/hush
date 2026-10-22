@@ -188,13 +188,16 @@ struct ThreadView: View {
                             (Text(l.date.formatted(date: .omitted, time: .shortened) + "  ").font(.system(size: 10.5, design: .monospaced)).foregroundColor(.secondary)
                              + Text(l.sender + " ").font(.system(size: 13.5, weight: .semibold)).foregroundColor(l.outgoing ? Theme.accent : .primary)
                              + Text(l.text).font(.system(size: 13.5)).foregroundColor(l.text.hasPrefix("[") && l.text.hasSuffix("]") ? .secondary : .primary))
-                                .textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading).id(l.id)
+                                .frame(maxWidth: .infinity, alignment: .leading).id(l.id)
                         }
                         // Lazy rows realize this only near the end, so it tells us whether the reader is at the bottom.
                         Color.clear.frame(height: 1)
                             .onAppear { pinnedToBottom = true }
                             .onDisappear { pinnedToBottom = false }
-                    }.padding(.horizontal, 14).padding(.vertical, 10)
+                    }
+                    // Selection is enabled once on the container, not on every row: per-row selectable text can swallow wheel events.
+                    .textSelection(.enabled)
+                    .padding(.horizontal, 14).padding(.vertical, 10)
                 }
                 .onChange(of: s.lines.last?.id) { _, id in if let id, pinnedToBottom { proxy.scrollTo(id, anchor: .bottom) } }
                 .onAppear { if let id = s.lines.last?.id { proxy.scrollTo(id, anchor: .bottom) } }
