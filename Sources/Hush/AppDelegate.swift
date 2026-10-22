@@ -38,7 +38,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
         model.requestNotificationAccess()   // asks once; without it macOS silently drops every banner
         model.start()
         HotKey.onPress[.open] = { [weak self] in self?.toggleMain() }
-        Prefs.shared.setShortcut(Prefs.shared.shortcut)   // registers the saved (or default) shortcut
+        HotKey.onPress[.stack] = { [weak self] in self?.toggleStack() }
+        Prefs.shared.setShortcut(Prefs.shared.shortcut)   // registers the saved (or default) shortcuts
+        Prefs.shared.setStackShortcut(Prefs.shared.stackShortcut)
         watchStatus()
         startControl()
         Updater.shared.confirmLaunch()                                   // tells a pending swap script "the new version started"

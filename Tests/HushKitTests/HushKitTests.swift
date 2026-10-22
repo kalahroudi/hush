@@ -193,6 +193,11 @@ final class ShortcutTests: XCTestCase {
         XCTAssertNil(HotKeySlot(rawValue: 0))
     }
 
+    func testStackDefaultIsValidAndDiffersFromOpenShortcut() {
+        XCTAssertTrue(Shortcut.stackDefault.isValid)
+        XCTAssertNotEqual(Shortcut.stackDefault, Shortcut.default)
+        XCTAssertEqual(Shortcut.stackDefault.display, "⌃⌥S")
+    }
     func testDisplayAndValidity() {
         XCTAssertEqual(Shortcut.default.display, "⌃⌥H")
         XCTAssertTrue(Shortcut.default.isValid)
