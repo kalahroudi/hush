@@ -342,6 +342,44 @@ final class ShortcutTests: XCTestCase {
         var bare = c; bare.text = ""
         XCTAssertEqual(FavoritesStack.accessibilityLabel(for: bare), "Mom, 3 unread messages")
     }
+    func testVisibleCardsComeFromTheCurrentListSoAShrinkingStackCannotCrash() {
+        // A reply removes a card; the view must only ever read cards from the list it was given (this crashed Hush with "Index out of range").
+        var cards = (1...3).map { stackCard(Int64($0)) }
+        XCTAssertEqual(FavoritesStack.visibleCards(cards, selection: 0).map(\.card.id), [1, 2, 3])
+        XCTAssertEqual(FavoritesStack.visibleCards(cards, selection: 0).map(\.depth), [0, 1, 2])
+        while !cards.isEmpty {
+            let removed = FavoritesStack.dropCard(id: cards[0].id, from: cards, selection: 0)
+            cards = removed.cards
+            XCTAssertEqual(FavoritesStack.visibleCards(cards, selection: removed.selection).count, cards.count)
+        }
+        XCTAssertTrue(FavoritesStack.visibleCards([], selection: 5).isEmpty)
+        XCTAssertEqual(FavoritesStack.visibleCards([stackCard(1)], selection: 9).map(\.card.id), [1], "stale selection stays in bounds")
+    }
+
+    func testStackKeysNavigateWhenNotReplying() {
+        func act(_ k: StackKey, replying: Bool = false, mode: StackMode = .cards) -> StackKeyAction? { k.action(replying: replying, mode: mode) }
+        XCTAssertEqual(act(.down), .next); XCTAssertEqual(act(.right), .next)
+        XCTAssertEqual(act(.up), .previous); XCTAssertEqual(act(.left), .previous)
+        XCTAssertEqual(act(.return), .reply)
+        XCTAssertEqual(act(.character("d")), .done); XCTAssertEqual(act(.character("D")), .done)
+        XCTAssertNil(act(.character("x")))
+        XCTAssertEqual(act(.escape), .close)
+    }
+
+    func testStackKeysLeaveTheReplyFieldAloneExceptEsc() {
+        func act(_ k: StackKey) -> StackKeyAction? { k.action(replying: true, mode: .cards) }
+        for k in [StackKey.up, .down, .left, .right, .return, .character("d")] { XCTAssertNil(act(k), "\(k) belongs to the text field") }
+        XCTAssertEqual(act(.escape), .cancelReply, "Esc leaves the field first, a second Esc closes")
+    }
+
+    func testStackKeysOnMessageScreensOnlyEscCloses() {
+        for mode in [StackMode.caughtUp, .empty] {
+            XCTAssertEqual(StackKey.escape.action(replying: false, mode: mode), .close)
+            XCTAssertNil(StackKey.down.action(replying: false, mode: mode))
+            XCTAssertNil(StackKey.return.action(replying: false, mode: mode))
+        }
+    }
+
     func testStackLayersShowTopCardAndPeekingEdges() {
         XCTAssertTrue(FavoritesStack.layers(count: 0, selection: 0).isEmpty)
         XCTAssertEqual(FavoritesStack.layers(count: 1, selection: 0).map(\.depth), [0])
