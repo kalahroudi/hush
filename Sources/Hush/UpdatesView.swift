@@ -15,7 +15,7 @@ struct UpdatesView: View {
         VStack(alignment: .leading, spacing: 16) {
             SettingsGroup("This build") {
                 SettingRow("Version", "From \(u.build.repo) · branch \(u.build.branch)") { Text("\(u.build.version) · \(u.build.shortCommit)\(u.build.isDirty ? " (modified)" : "")").font(.system(size: 12.5, design: .monospaced)) }
-                SettingRow("Update channel", "Releases: signed disk images, the safe default. Main branch: also offers a build of the newest commit (needs Xcode command line tools).") { Segmented(options: UpdateChannel.allCases.map { ($0, $0.label) }, selection: $p.updateChannel) }
+                SettingRow("Update channel", UpdateChannel.settingDescription) { Segmented(options: UpdateChannel.allCases.map { ($0, $0.label) }, selection: $p.updateChannel) }
                 SettingRow("Check automatically", "Once a day at most, when the app starts. Nothing runs in between.") { Toggle("", isOn: $p.autoCheckUpdates).labelsHidden().toggleStyle(.switch).tint(Theme.accent) }
             }
             VStack(alignment: .leading, spacing: 10) {
@@ -46,7 +46,7 @@ struct UpdatesView: View {
                     }.padding(.top, 4)
                 }
             }.card(padding: 14)
-            Text("Releases install a signed disk image: it is downloaded, checked against its SHA-256, verified, swapped in after the app quits, and rolled back automatically if the new version doesn't start. Without a release, the app can build the newest commit of \(u.build.branch) (needs Xcode command line tools).").font(.system(size: 12)).foregroundStyle(.secondary)
+            Text(UpdateChannel.updatesFootnote(branch: u.build.branch)).font(.system(size: 12)).foregroundStyle(.secondary)
             if !u.log.isEmpty || !u.savedLog.isEmpty {
                 DisclosureGroup("Update log") {
                     ScrollView { Text((u.log.isEmpty ? u.savedLog : u.log).suffix(80).joined(separator: "\n")).font(.system(size: 11, design: .monospaced)).foregroundStyle(Color(white: 0.85)).frame(maxWidth: .infinity, alignment: .leading).padding(10).textSelection(.enabled) }

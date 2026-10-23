@@ -85,4 +85,33 @@ final class ToolchainTests: XCTestCase {
         for word in ["Xcode", "xcode-select", "Releases", "Your current Hush is untouched."] { XCTAssertTrue(text.contains(word), word) }
         XCTAssertNotEqual(p.title, "The new version couldn't be built")
     }
+
+    func testIssue44MacroErrorIsClassifiedAsToolchainProblem() {
+        let text = "error: external macro implementation type 'SwiftUIMacros.StateMacro' could not be found for macro 'State()'; plugin for module 'SwiftUIMacros' not found"
+        let p = AppProblem.from(UpdateError.buildFailed(text))
+        XCTAssertEqual(p.title, AppProblem.toolchainTitle)
+        XCTAssertNotEqual(p.title, "The new version couldn't be built")
+        XCTAssertTrue(p.hint.contains("Releases")); XCTAssertTrue(p.hint.contains("Your current Hush is untouched."))
+        XCTAssertEqual(p.detail, text)
+        XCTAssertEqual(AppProblem.from(ShellError.failed(command: "swift", status: 1, stderr: text)).title, AppProblem.toolchainTitle)
+        XCTAssertEqual(AppProblem.from(UpdateError.buildFailed("error: cannot convert value of type 'Int' to 'String'")).title, "The new version couldn't be built")
+    }
+
+    func testCommandLineToolsAloneAreNoLongerCalledSufficient() {
+        let texts = [UpdateChannel.settingDescription, UpdateChannel.updatesFootnote(branch: "main"),
+                     UpdateError.missingTool("Swift").errorDescription ?? "",
+                     AppProblem.from(UpdateError.missingTool("Swift")).title + AppProblem.from(UpdateError.missingTool("Swift")).hint]
+        for t in texts {
+            XCTAssertFalse(t.lowercased().contains("command line tools"), t)
+            XCTAssertTrue(t.contains("Xcode"), t)
+        }
+        XCTAssertTrue(AppProblem.from(UpdateError.missingTool("Swift")).hint.contains("Releases"))
+    }
+
+    func testDefaultChannelIsReleases() {
+        XCTAssertEqual(UpdateChannel.default, .releases)
+        XCTAssertEqual(UpdateChannel(stored: nil), .releases)
+        XCTAssertEqual(UpdateChannel(stored: "junk"), .releases)
+        XCTAssertEqual(UpdateChannel(stored: "main"), .main)
+    }
 }

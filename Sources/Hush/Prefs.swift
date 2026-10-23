@@ -8,9 +8,6 @@ import HushKit
 enum ThemeChoice: String, CaseIterable { case system, light, dark
     var label: String { rawValue.capitalized }
 }
-enum UpdateChannel: String, CaseIterable { case releases, main
-    var label: String { self == .releases ? "Releases" : "Main branch" }
-}
 
 /// User preferences, stored in UserDefaults. Add a property here, a `register(defaults:)` entry, and a row in SettingsPane:
 /// a preference that has no row in Settings does not exist.
@@ -50,7 +47,7 @@ final class Prefs {
         agentsCanRead = d.bool(forKey: "agentsCanRead")
         favorites = Set((d.array(forKey: "favorites") as? [NSNumber] ?? []).map(\.int64Value))
         autoCheckUpdates = d.bool(forKey: "autoCheckUpdates")
-        updateChannel = UpdateChannel(rawValue: d.string(forKey: "updateChannel") ?? "") ?? .releases
+        updateChannel = UpdateChannel(stored: d.string(forKey: "updateChannel"))
         // First run: opt in to launch at login. After that the user's choice always wins.
         if !d.bool(forKey: "launchAtLoginDefaulted") {
             d.set(true, forKey: "launchAtLoginDefaulted")

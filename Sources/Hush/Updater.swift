@@ -303,7 +303,7 @@ final class Updater {
             // swift prints the whole compiler command line after the real diagnostics, so keep the
             // "error:" lines apart and drop that command line from the tail.
             let short = line.count > 300 ? String(line.prefix(300)) + "…" : line
-            if line.contains(" error: ") || line.hasPrefix("error: ") { if tail.errors.count < 6 { tail.errors.append(short) } }
+            if line.contains(" error: ") || line.hasPrefix("error: ") { if tail.errors.count < 6 || AppProblem.isMissingMacroPlugin(line.lowercased()) { tail.errors.append(short) } }
             if !line.contains(" -module-name ") && !line.hasPrefix("Command ") { tail.lines.append(short); if tail.lines.count > 8 { tail.lines.removeFirst() } }
             Task { @MainActor in Updater.shared.append(line) }
         }
