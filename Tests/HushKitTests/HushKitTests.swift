@@ -738,4 +738,16 @@ final class StackMouseTests: XCTestCase {
         var s = StackScroll()
         XCTAssertNil(s.add(4)); XCTAssertNil(s.add(-4)); XCTAssertNil(s.add(3))
     }
+
+    func testShownLinesKeepsNewestOldestFirst() {
+        let lines = (1...6).map { Line(id: Int64($0), date: Date(timeIntervalSince1970: Double($0)), sender: "M", text: "m\($0)", outgoing: false) }
+        let card = StackCard(id: 1, title: "A", unread: 6, lines: lines, sender: "M", text: "m6", date: lines.last?.date)
+        XCTAssertEqual(FavoritesStack.shownLines(for: card).map(\.text), ["m3", "m4", "m5", "m6"])
+        XCTAssertEqual(FavoritesStack.shownLines(for: card, limit: 2).map(\.text), ["m5", "m6"])
+    }
+
+    func testShownLinesFallsBackToNewestText() {
+        let card = StackCard(id: 1, title: "A", unread: 3, lines: [], sender: "M", text: "hi", date: nil)
+        XCTAssertEqual(FavoritesStack.shownLines(for: card).map(\.text), ["hi"])
+    }
 }
