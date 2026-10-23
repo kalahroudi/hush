@@ -2,7 +2,7 @@
 # Installs Hush into /Applications from the latest GitHub release.
 #   curl -fsSL https://raw.githubusercontent.com/kalahroudi/hush/main/scripts/install.sh | bash
 # Options (environment): APP_VERSION=v0.1.0 to pin a version, APP_DEST=~/Applications to change the folder.
-# If no release exists yet, it builds from source (needs the Xcode command line tools).
+# If no release exists yet, it builds from source (needs full Xcode; scripts/bundle.sh checks it).
 set -euo pipefail
 
 REPO="kalahroudi/hush"
@@ -43,7 +43,7 @@ if [ -n "${DMG_URL:-}" ]; then
   SRC="$TMP/mnt/Hush.app"
 else
   say "No release found. Building from source (a few minutes)"
-  command -v swift >/dev/null || die "Install the Xcode command line tools first: xcode-select --install"
+  command -v swift >/dev/null || die "Building from source needs full Xcode (the Command Line Tools alone are not enough). Install Xcode, then run: sudo xcode-select -s /Applications/Xcode.app/Contents/Developer"
   git clone --depth 1 "https://github.com/$REPO.git" "$TMP/src"
   (cd "$TMP/src" && scripts/bundle.sh)
   SRC="$TMP/src/dist/Hush.app"
