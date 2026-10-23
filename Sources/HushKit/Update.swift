@@ -94,7 +94,7 @@ public enum UpdateStatus: Equatable, Sendable {
 }
 
 public enum UpdateError: Error, LocalizedError, Equatable {
-    case network(String), rateLimited, badResponse, missingTool(String), notBundled, notWritable(String), buildFailed(String), verifyFailed(String)
+    case network(String), rateLimited, badResponse, missingTool(String), notBundled, notWritable(String), buildFailed(String), verifyFailed(String), toolchainUnusable(String)
 
     public var errorDescription: String? {
         switch self {
@@ -106,6 +106,7 @@ public enum UpdateError: Error, LocalizedError, Equatable {
         case .notWritable(let p): return "No permission to replace \(p). Move the app to a folder you own."
         case .buildFailed(let m): return "The build failed. \(m)"
         case .verifyFailed(let m): return "The new build didn't pass checks, so nothing was replaced. \(m)"
+        case .toolchainUnusable(let m): return "\(AppProblem.toolchainTitle). \(m)"
         }
     }
 }
@@ -244,6 +245,8 @@ public struct AppProblem: Equatable, Sendable {
     public init(area: String = "Update", title: String, hint: String, detail: String) { self.area = area; self.title = title; self.hint = hint; self.detail = detail }
 
     static let untouched = "Your current Hush is untouched."
+    static let toolchainTitle = "A full Xcode is needed to build this update"
+    static let toolchainHint = "Install Xcode from the App Store, or pick it with xcode-select -s /Applications/Xcode.app/Contents/Developer. Or switch the update channel to Releases, which needs no tools. \(untouched)"
 
     public static func from(_ error: Error) -> AppProblem {
         let raw = String(describing: error) + " | " + error.localizedDescription
@@ -261,6 +264,7 @@ public struct AppProblem: Equatable, Sendable {
                 let lower = m.lowercased()
                 if ["could not resolve host", "unable to access", "network is unreachable", "timed out", "connection"].contains(where: lower.contains) { return network(detail: m) }
                 return .init(title: "The new version couldn't be built", hint: "\(untouched) Switch the update channel to Releases for a prebuilt version, or press Report on GitHub so we can fix it.", detail: m)
+            case .toolchainUnusable(let m): return .init(title: toolchainTitle, hint: toolchainHint, detail: m)
             case .verifyFailed(let m): return .init(title: "The new version didn't pass its safety checks", hint: "Nothing was replaced. \(untouched)", detail: m)
             }
         }
