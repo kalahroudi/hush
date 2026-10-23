@@ -61,6 +61,13 @@ final class AppModel {
     var stackReplying = false {
         didSet { if !stackReplying { flushStackQueue() } }
     }
+    /// Why the last reply or "Done" on the top card failed. The card shows it, since the stack window has nowhere else to.
+    var stackError: String?
+    /// True when the top card has no draft, so the reply field has nothing to lose.
+    var stackDraftIsEmpty: Bool {
+        guard let id = FavoritesStack.replyTarget(cards: stackCards, selection: stackSelection) else { return true }
+        return (draftMessages[id] ?? "").isEmpty
+    }
     /// True while the stack window is on screen; incoming messages only update the stack then.
     var stackOpen = false
     /// New favorite chats that arrived during a reply. They join the stack when the reply ends.
@@ -145,29 +152,37 @@ final class AppModel {
         guard let id = FavoritesStack.replyTarget(cards: stackCards, selection: stackSelection),
               let text = draftMessages[id], !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         draftMessages[id] = nil
+        stackError = nil
         Task {
             do { try await session.send(text, to: id) }
-            catch { draftMessages[id] = text; report(error, area: "Sending a message"); return }
-            await finishStackCard(id)
+            catch { draftMessages[id] = text; stackError = report(error, area: "Sending a message").title; return }
+            await finishStackCard(id, sent: true)
         }
     }
 
-    /// Brings the next or previous card to the top. It does not wrap, and it leaves the card being replied to alone.
+    /// Brings the next or previous card to the top. It does not wrap, and it leaves a card with a draft alone while it is being replied to.
     func stepStack(forward: Bool) {
-        guard stackMode == .cards, !stackReplying else { return }
+        guard stackMode == .cards, !stackReplying || stackDraftIsEmpty else { return }
+        stackReplying = false
+        stackError = nil
         stackSelection = FavoritesStack.step(count: stackCards.count, selection: stackSelection, forward: forward)
     }
 
     /// "Done": marks the top card's chat read without replying and drops its card.
     func markStackDone() {
         guard let id = FavoritesStack.replyTarget(cards: stackCards, selection: stackSelection) else { return }
-        Task { await finishStackCard(id) }
+        stackError = nil
+        Task { await finishStackCard(id, sent: false) }
     }
 
-    /// Marks the chat read through the same path the main window uses, then removes its card. A failed mark keeps the card.
-    private func finishStackCard(_ id: Int64) async {
+    /// Marks the chat read through the same path the main window uses, then removes its card.
+    /// A failed mark keeps the card for "Done", but not after a reply: that message is already sent, so the card goes either way.
+    private func finishStackCard(_ id: Int64, sent: Bool) async {
         do { try await session.markRead(chatId: id) }
-        catch { report(error, area: "Marking a chat read"); return }
+        catch {
+            let problem = report(error, area: "Marking a chat read")
+            if !sent { stackError = problem.title; return }
+        }
         let r = FavoritesStack.dropCard(id: id, from: stackCards, selection: stackSelection)
         stackCards = r.cards; stackSelection = r.selection; stackMode = r.mode
         stackReplying = false

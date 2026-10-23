@@ -372,6 +372,15 @@ final class ShortcutTests: XCTestCase {
         XCTAssertEqual(act(.escape), .cancelReply, "Esc leaves the field first, a second Esc closes")
     }
 
+    func testArrowsStillChangeCardWhenTheReplyFieldIsEmpty() {
+        func act(_ k: StackKey) -> StackKeyAction? { k.action(replying: true, mode: .cards, draftIsEmpty: true) }
+        XCTAssertEqual(act(.down), .next); XCTAssertEqual(act(.right), .next)
+        XCTAssertEqual(act(.up), .previous); XCTAssertEqual(act(.left), .previous)
+        XCTAssertNil(act(.return), "Return still sends from the field")
+        XCTAssertNil(act(.character("d")), "typing still reaches the field")
+        XCTAssertEqual(act(.escape), .cancelReply)
+    }
+
     func testStackKeysOnMessageScreensOnlyEscCloses() {
         for mode in [StackMode.caughtUp, .empty] {
             XCTAssertEqual(StackKey.escape.action(replying: false, mode: mode), .close)

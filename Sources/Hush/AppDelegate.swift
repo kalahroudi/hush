@@ -116,7 +116,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
 
     /// Runs a key pressed over the stack. Returns false to let the key through, e.g. to the reply field.
     private func handleStackKey(_ key: StackKey) -> Bool {
-        guard let action = key.action(replying: model.stackReplying, mode: model.stackMode) else { return false }
+        guard let action = key.action(replying: model.stackReplying, mode: model.stackMode, draftIsEmpty: model.stackDraftIsEmpty) else { return false }
         switch action {
         case .next: model.stepStack(forward: true)
         case .previous: model.stepStack(forward: false)
