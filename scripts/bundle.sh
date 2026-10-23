@@ -10,6 +10,9 @@ BRANCH="${APP_BRANCH:-main}"
 COMMIT="$(git rev-parse HEAD 2>/dev/null || echo unknown)"
 if [ "$COMMIT" != "unknown" ] && [ -n "$(git status --porcelain 2>/dev/null)" ]; then COMMIT="$COMMIT-dirty"; fi
 
+# shellcheck source=scripts/toolchain-check.sh
+. "$(dirname "$0")/toolchain-check.sh"
+
 swift build -c release --product Hush
 swift build -c release --product hush-mcp
 BIN="$(swift build -c release --show-bin-path)"
