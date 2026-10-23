@@ -159,11 +159,9 @@ struct ThreadView: View {
     /// Tab (false) and Shift+Tab (true) in the message box switch chats; nil leaves Tab alone.
     var onSwitch: ((Bool) -> Void)?
     @State private var sending = false
-    /// True while the end of the history is on screen, so a new message only scrolls a reader who is already at the bottom.
-    @State private var pinnedToBottom = true
-    @State private var bottomOffset: CGFloat = 0
-    @State private var viewportBottom: CGFloat = 0
-    private static let bottomID = "thread-bottom"
+    /// True while the end of the history is on screen; drives the jump-to-latest button.
+    @State private var atBottom = true
+    @State private var scroller = ThreadScroller()
     private var draft: Binding<String> {
         let id = model.session.openChat?.id ?? 0
         return Binding(get: { model.draftMessages[id] ?? "" }, set: { model.draftMessages[id] = $0.isEmpty ? nil : $0 })
@@ -184,62 +182,42 @@ struct ThreadView: View {
                         .help(fav ? "Favorite: banners and the menu bar count are on" : "Make favorite to get banners and a menu bar count").accessibilityLabel("Favorite")
                 }
             }
-            ScrollViewReader { proxy in
-                ScrollView {
-                    // Not lazy: a chat holds a few dozen lines, and estimated row heights made scrollTo land short of the end.
-                    VStack(alignment: .leading, spacing: 3) {
-                        ForEach(s.lines) { l in
-                            (Text(l.date.formatted(date: .omitted, time: .shortened) + "  ").font(.system(size: 10.5, design: .monospaced)).foregroundColor(.secondary)
-                             + Text(l.sender + " ").font(.system(size: 13.5, weight: .semibold)).foregroundColor(l.outgoing ? Theme.accent : .primary)
-                             + Text(l.text).font(.system(size: 13.5)).foregroundColor(l.text.hasPrefix("[") && l.text.hasSuffix("]") ? .secondary : .primary))
-                                .frame(maxWidth: .infinity, alignment: .leading).id(l.id)
-                        }
-                        // Reports where the end of the thread sits, so we know whether the reader is near the bottom.
-                        Color.clear.frame(height: 1).id(Self.bottomID)
-                            .background(GeometryReader { g in Color.clear.preference(key: BottomOffsetKey.self, value: g.frame(in: .global).minY) })
-                    }
-                    // Selection is enabled once on the container, not on every row: per-row selectable text can swallow wheel events.
-                    .textSelection(.enabled)
-                    .padding(.horizontal, 14).padding(.vertical, 10)
-                }
-                                .background(GeometryReader { g in Color.clear.preference(key: ViewportHeightKey.self, value: g.frame(in: .global).maxY) })
-                .onPreferenceChange(BottomOffsetKey.self) { bottomOffset = $0; pinnedToBottom = bottomOffset <= viewportBottom + 120 }
-                .onPreferenceChange(ViewportHeightKey.self) { viewportBottom = $0; pinnedToBottom = bottomOffset <= viewportBottom + 120 }
-                // Follow new messages while the reader is at the bottom, and always follow their own.
-                .onChange(of: s.lines.last?.id) { _, id in if id != nil, pinnedToBottom || s.lines.last?.outgoing == true { jumpToLatest(proxy) } }
-                // A different chat opens at its newest message, whatever the previous one was scrolled to.
-                .onChange(of: chat?.id) { _, _ in jumpToLatest(proxy) }
-                .onAppear { jumpToLatest(proxy) }
-                .overlay(alignment: .bottomTrailing) {
-                    if !pinnedToBottom, !s.lines.isEmpty {
-                        Button { jumpToLatest(proxy, animated: true) } label: {
-                            Image(systemName: "chevron.down").font(.system(size: 12, weight: .semibold)).frame(width: 28, height: 28)
-                                .background(.regularMaterial, in: Circle()).overlay(Circle().strokeBorder(Color.primary.opacity(0.15)))
-                        }
-                        .buttonStyle(.plain).padding(12).help("Jump to the latest message").accessibilityLabel("Jump to the latest message")
-                        .transition(.opacity)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 3) {
+                    ForEach(s.lines) { l in
+                        (Text(l.date.formatted(date: .omitted, time: .shortened) + "  ").font(.system(size: 10.5, design: .monospaced)).foregroundColor(.secondary)
+                         + Text(l.sender + " ").font(.system(size: 13.5, weight: .semibold)).foregroundColor(l.outgoing ? Theme.accent : .primary)
+                         + Text(l.text).font(.system(size: 13.5)).foregroundColor(l.text.hasPrefix("[") && l.text.hasSuffix("]") ? .secondary : .primary))
+                            .frame(maxWidth: .infinity, alignment: .leading)
                     }
                 }
-                .animation(.easeOut(duration: 0.15), value: pinnedToBottom)
+                // Selection is enabled once on the container, not on every row: per-row selectable text can swallow wheel events.
+                .textSelection(.enabled)
+                .padding(.horizontal, 14).padding(.vertical, 10)
+                // Sits inside the scroll view so it can find the AppKit scroll view that backs it.
+                .background(ScrollBridge(scroller: scroller, onAtBottom: { atBottom = $0 }))
             }
+            // A different chat opens at its newest message, whatever the previous one was scrolled to.
+            .onChange(of: chat?.id) { _, _ in scroller.follow() }
+            .overlay(alignment: .bottomTrailing) {
+                if !atBottom, !s.lines.isEmpty {
+                    Button { scroller.follow() } label: {
+                        Image(systemName: "chevron.down").font(.system(size: 12, weight: .semibold)).frame(width: 28, height: 28)
+                            .background(.regularMaterial, in: Circle()).overlay(Circle().strokeBorder(Color.primary.opacity(0.15)))
+                    }
+                    .buttonStyle(.plain).padding(12).help("Jump to the latest message").accessibilityLabel("Jump to the latest message")
+                    .transition(.opacity)
+                }
+            }
+            .animation(.easeOut(duration: 0.15), value: atBottom)
             ComposeField(text: draft, onSend: send, onTab: onSwitch)
                 .padding(.horizontal, 14).padding(.vertical, 10).overlay(alignment: .top) { Divider() }
         }
     }
 
-    private func jumpToLatest(_ proxy: ScrollViewProxy, animated: Bool = false) {
-        func go() {
-            guard !model.session.lines.isEmpty else { return }
-            if animated { withAnimation { proxy.scrollTo(Self.bottomID, anchor: .bottom) } } else { proxy.scrollTo(Self.bottomID, anchor: .bottom) }
-        }
-        go()
-        // A just-appended row of the lazy stack isn't laid out yet, so the first scroll can land short; repeat once it is.
-        DispatchQueue.main.async { go() }
-    }
-
     private func send() {
         guard !sending, let id = model.session.openChat?.id, !draft.wrappedValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-        let text = draft.wrappedValue; model.draftMessages[id] = nil; sending = true
+        let text = draft.wrappedValue; model.draftMessages[id] = nil; sending = true; scroller.follow()
         Task {
             do { try await model.session.send(text, to: id) } catch { model.draftMessages[id] = text; model.report(error, area: "Sending a message") }
             sending = false
@@ -293,12 +271,56 @@ struct SetupScreen: View {
     }
 }
 
-private struct BottomOffsetKey: PreferenceKey {
-    static let defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
+/// Drives the AppKit scroll view behind a SwiftUI ScrollView: while `stick` is set it keeps the end in view as the content grows
+/// (history loading in, rows laying out, new messages), and it reports whether the reader is at the end.
+@MainActor final class ThreadScroller: NSObject {
+    private weak var scrollView: NSScrollView?
+    private var stick = true
+    var onAtBottom: ((Bool) -> Void)?
+
+    func attach(_ view: NSView) {
+        guard scrollView == nil, let sv = view.enclosingScrollView, let doc = sv.documentView else { return }
+        scrollView = sv
+        sv.contentView.postsBoundsChangedNotifications = true
+        doc.postsFrameChangedNotifications = true
+        NotificationCenter.default.addObserver(self, selector: #selector(boundsChanged), name: NSView.boundsDidChangeNotification, object: sv.contentView)
+        NotificationCenter.default.addObserver(self, selector: #selector(contentChanged), name: NSView.frameDidChangeNotification, object: doc)
+        scrollToEnd()
+    }
+
+    /// Scrolls to the newest message and keeps following until the reader scrolls away.
+    func follow() { stick = true; scrollToEnd(); DispatchQueue.main.async { [weak self] in self?.scrollToEnd() } }
+
+    private var distanceFromEnd: CGFloat {
+        guard let sv = scrollView, let doc = sv.documentView else { return 0 }
+        return doc.frame.height - sv.contentView.bounds.maxY
+    }
+
+    private func scrollToEnd() {
+        guard let sv = scrollView, let doc = sv.documentView else { return }
+        let y = max(0, doc.frame.height - sv.contentView.bounds.height)
+        sv.contentView.scroll(to: NSPoint(x: 0, y: y))
+        sv.reflectScrolledClipView(sv.contentView)
+        onAtBottom?(true)
+    }
+
+    @objc private func boundsChanged() {
+        let near = distanceFromEnd < 24
+        stick = near
+        onAtBottom?(near)
+    }
+
+    @objc private func contentChanged() {
+        if stick { scrollToEnd() } else { onAtBottom?(distanceFromEnd < 24) }
+    }
 }
 
-private struct ViewportHeightKey: PreferenceKey {
-    static let defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
+private struct ScrollBridge: NSViewRepresentable {
+    let scroller: ThreadScroller
+    let onAtBottom: (Bool) -> Void
+    func makeNSView(context: Context) -> NSView { NSView() }
+    func updateNSView(_ view: NSView, context: Context) {
+        scroller.onAtBottom = onAtBottom
+        DispatchQueue.main.async { scroller.attach(view) }
+    }
 }
