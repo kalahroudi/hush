@@ -254,9 +254,18 @@ public enum StackKeyAction: Equatable, Sendable {
 extension StackKey {
     /// The action for a key, or nil to let it through (to the reply field while replying).
     /// While replying only Esc is ours: it leaves the field first, and only the next Esc closes the stack.
-    public func action(replying: Bool, mode: StackMode) -> StackKeyAction? {
+    /// The exception is an empty reply field: there is nothing to lose and no caret to move, so the arrows still change card.
+    public func action(replying: Bool, mode: StackMode, draftIsEmpty: Bool = false) -> StackKeyAction? {
         if self == .escape { return replying ? .cancelReply : .close }
-        guard mode == .cards, !replying else { return nil }
+        guard mode == .cards else { return nil }
+        if replying {
+            guard draftIsEmpty else { return nil }
+            switch self {
+            case .down, .right: return .next
+            case .up, .left: return .previous
+            default: return nil
+            }
+        }
         switch self {
         case .down, .right: return .next
         case .up, .left: return .previous

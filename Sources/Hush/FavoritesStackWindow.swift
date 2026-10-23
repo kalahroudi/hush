@@ -148,6 +148,9 @@ struct StackView: View {
                     Text(card.text).font(.system(size: 14)).lineLimit(8).frame(maxWidth: .infinity, alignment: .leading)
                 }
                 Spacer(minLength: 0)
+                if top, let error = model.stackError {
+                    Label(error, systemImage: "exclamationmark.triangle.fill").font(.system(size: 11.5)).foregroundStyle(.red).lineLimit(2)
+                }
                 if top { reply }
             }
             .overlay(alignment: .bottom) {   // the strip of a card behind shows who it is from
