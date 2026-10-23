@@ -94,7 +94,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
     private func showStack() {
         guard stackWindow == nil else { return }
         let w = StackPanel(contentRect: NSRect(x: 0, y: 0, width: 460, height: 360),
-                           styleMask: [.borderless], backing: .buffered, defer: false)
+                           styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         w.isReleasedWhenClosed = false
         w.level = .floating
         w.isOpaque = false
@@ -109,7 +109,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
         if let f = screen?.visibleFrame { w.setFrameOrigin(NSPoint(x: f.midX - w.frame.width / 2, y: f.midY - w.frame.height / 2)) } else { w.center() }
         stackWindow = w
         model.stackOpen = true
-        NSApp.activate(ignoringOtherApps: true)
+        // A hotkey pressed in another app cannot make Hush the active app (macOS 14+ ignores the request), and an inactive app's
+        // window never becomes key, so the keys would go to the app behind. A non-activating panel takes the keyboard without it.
         w.makeKeyAndOrderFront(nil)
     }
 
