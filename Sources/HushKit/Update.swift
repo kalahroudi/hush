@@ -3,7 +3,7 @@
 import Foundation
 
 // Self-update model. The approach follows the mlxplayer app:
-//   1. Prefer the latest published GitHub release (a signed disk image, no Xcode needed).
+//   1. Prefer the latest published GitHub release (a signed disk image; this path needs no developer tools).
 //   2. Otherwise compare this build's commit with the head of the branch and build from source.
 //   3. Verify, swap the app bundle after quitting, and roll back if the new one never reports in.
 
@@ -93,19 +93,34 @@ public enum UpdateStatus: Equatable, Sendable {
     case notComparable(String)
 }
 
+/// Where updates come from. Releases is the default and needs no developer tools.
+public enum UpdateChannel: String, CaseIterable, Sendable {
+    case releases, main
+    public static let `default`: UpdateChannel = .releases
+    public var label: String { self == .releases ? "Releases" : "Main branch" }
+    public init(stored: String?) { self = stored.flatMap(UpdateChannel.init(rawValue:)) ?? .default }
+
+    /// Settings copy. Kept here so a test can check it never says Command Line Tools alone are enough.
+    public static let settingDescription = "Releases: signed disk images, the safe default, no tools needed. Main branch: also offers a build of the newest commit (needs a full Xcode)."
+    public static func updatesFootnote(branch: String) -> String {
+        "Releases install a signed disk image: it is downloaded, checked against its SHA-256, verified, swapped in after the app quits, and rolled back automatically if the new version doesn't start. Without a release, the app can build the newest commit of \(branch) (needs a full Xcode; Releases need nothing)."
+    }
+}
+
 public enum UpdateError: Error, LocalizedError, Equatable {
-    case network(String), rateLimited, badResponse, missingTool(String), notBundled, notWritable(String), buildFailed(String), verifyFailed(String)
+    case network(String), rateLimited, badResponse, missingTool(String), notBundled, notWritable(String), buildFailed(String), verifyFailed(String), toolchainUnusable(String)
 
     public var errorDescription: String? {
         switch self {
         case .network(let m): return "Couldn't reach GitHub. \(m)"
         case .rateLimited: return "GitHub is limiting requests. Try again in a few minutes."
         case .badResponse: return "GitHub sent an answer that couldn't be read."
-        case .missingTool(let t): return "\(t) is needed to build the update. Install the Xcode command line tools."
+        case .missingTool(let t): return "\(t) is needed to build the update. A full Xcode is needed (or switch the update channel to Releases, which needs no tools)."
         case .notBundled: return "Updates work from the installed app, not from a development build."
         case .notWritable(let p): return "No permission to replace \(p). Move the app to a folder you own."
         case .buildFailed(let m): return "The build failed. \(m)"
         case .verifyFailed(let m): return "The new build didn't pass checks, so nothing was replaced. \(m)"
+        case .toolchainUnusable(let m): return "\(AppProblem.toolchainTitle). \(m)"
         }
     }
 }
@@ -244,6 +259,14 @@ public struct AppProblem: Equatable, Sendable {
     public init(area: String = "Update", title: String, hint: String, detail: String) { self.area = area; self.title = title; self.hint = hint; self.detail = detail }
 
     static let untouched = "Your current Hush is untouched."
+    static let toolchainTitle = "A full Xcode is needed to build this update"
+    static let toolchainHint = "Install Xcode from the App Store, or pick it with xcode-select -s /Applications/Xcode.app/Contents/Developer. Or switch the update channel to Releases, which needs no tools. \(untouched)"
+
+    /// The compiler's text when the toolchain can't load the SwiftUI macro plugin (issue #44).
+    public static func isMissingMacroPlugin(_ lower: String) -> Bool {
+        (lower.contains("plugin for module") && lower.contains("not found"))
+            || (lower.contains("external macro implementation type") && lower.contains("could not be found"))
+    }
 
     public static func from(_ error: Error) -> AppProblem {
         let raw = String(describing: error) + " | " + error.localizedDescription
@@ -253,14 +276,19 @@ public struct AppProblem: Equatable, Sendable {
             case .rateLimited: return .init(title: "GitHub is limiting requests", hint: "Wait a few minutes and try again.", detail: raw)
             case .badResponse: return .init(title: "GitHub's answer couldn't be read", hint: "Try again later. \(untouched)", detail: raw)
             case .missingTool(let t):
-                return .init(title: "\(t == "git" ? "Git" : "The Xcode command line tools") \(t == "git" ? "is" : "are") missing, and they are needed to build an update",
-                             hint: "Run xcode-select --install in Terminal, or switch the update channel to Releases, which needs no tools.", detail: raw)
+                if t == "git" {
+                    return .init(title: "Git is missing, and it is needed to build an update",
+                                 hint: "Run xcode-select --install in Terminal to get git, or switch the update channel to Releases, which needs no tools. \(untouched)", detail: raw)
+                }
+                return .init(title: "\(t) is missing, and it is needed to build an update", hint: toolchainHint, detail: raw)
             case .notBundled: return .init(title: "Updates only work from the installed app", hint: "Install Hush into Applications and update from there.", detail: raw)
             case .notWritable(let p): return .init(title: "Hush can't replace itself where it is", hint: "Move Hush to Applications or a folder you own, then try again.", detail: "No write access to \(p). \(raw)")
             case .buildFailed(let m):
                 let lower = m.lowercased()
+                if isMissingMacroPlugin(lower) { return .init(title: toolchainTitle, hint: toolchainHint, detail: m) }
                 if ["could not resolve host", "unable to access", "network is unreachable", "timed out", "connection"].contains(where: lower.contains) { return network(detail: m) }
                 return .init(title: "The new version couldn't be built", hint: "\(untouched) Switch the update channel to Releases for a prebuilt version, or press Report on GitHub so we can fix it.", detail: m)
+            case .toolchainUnusable(let m): return .init(title: toolchainTitle, hint: toolchainHint, detail: m)
             case .verifyFailed(let m): return .init(title: "The new version didn't pass its safety checks", hint: "Nothing was replaced. \(untouched)", detail: m)
             }
         }
