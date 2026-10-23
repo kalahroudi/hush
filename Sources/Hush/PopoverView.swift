@@ -162,7 +162,7 @@ struct ThreadView: View {
     /// True while the end of the history is on screen, so a new message only scrolls a reader who is already at the bottom.
     @State private var pinnedToBottom = true
     @State private var bottomOffset: CGFloat = 0
-    @State private var viewportHeight: CGFloat = 0
+    @State private var viewportBottom: CGFloat = 0
     private static let bottomID = "thread-bottom"
     private var draft: Binding<String> {
         let id = model.session.openChat?.id ?? 0
@@ -196,16 +196,15 @@ struct ThreadView: View {
                         }
                         // Reports where the end of the thread sits, so we know whether the reader is near the bottom.
                         Color.clear.frame(height: 1).id(Self.bottomID)
-                            .background(GeometryReader { g in Color.clear.preference(key: BottomOffsetKey.self, value: g.frame(in: .named("thread")).minY) })
+                            .background(GeometryReader { g in Color.clear.preference(key: BottomOffsetKey.self, value: g.frame(in: .global).minY) })
                     }
                     // Selection is enabled once on the container, not on every row: per-row selectable text can swallow wheel events.
                     .textSelection(.enabled)
                     .padding(.horizontal, 14).padding(.vertical, 10)
                 }
-                .coordinateSpace(name: "thread")
-                .background(GeometryReader { g in Color.clear.preference(key: ViewportHeightKey.self, value: g.size.height) })
-                .onPreferenceChange(BottomOffsetKey.self) { bottomOffset = $0; pinnedToBottom = bottomOffset <= viewportHeight + 120 }
-                .onPreferenceChange(ViewportHeightKey.self) { viewportHeight = $0; pinnedToBottom = bottomOffset <= viewportHeight + 120 }
+                                .background(GeometryReader { g in Color.clear.preference(key: ViewportHeightKey.self, value: g.frame(in: .global).maxY) })
+                .onPreferenceChange(BottomOffsetKey.self) { bottomOffset = $0; pinnedToBottom = bottomOffset <= viewportBottom + 120 }
+                .onPreferenceChange(ViewportHeightKey.self) { viewportBottom = $0; pinnedToBottom = bottomOffset <= viewportBottom + 120 }
                 // Follow new messages while the reader is at the bottom, and always follow their own.
                 .onChange(of: s.lines.last?.id) { _, id in if id != nil, pinnedToBottom || s.lines.last?.outgoing == true { jumpToLatest(proxy) } }
                 // A different chat opens at its newest message, whatever the previous one was scrolled to.
