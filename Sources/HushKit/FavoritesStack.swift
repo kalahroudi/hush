@@ -275,3 +275,16 @@ extension StackKey {
         }
     }
 }
+
+extension FavoritesStack {
+    /// How many unread messages the top card lists at most.
+    public static let maxShownLines = 4
+
+    /// The messages the top card lists, oldest first: the newest `limit` unread ones. A card with none loaded falls back to its newest text, so it never shows empty.
+    public static func shownLines(for card: StackCard, limit: Int = maxShownLines) -> [Line] {
+        if card.lines.isEmpty {
+            return [Line(id: card.id, date: card.date ?? .distantPast, sender: card.sender, text: card.text, outgoing: false)]
+        }
+        return Array(card.lines.suffix(max(limit, 1)))
+    }
+}

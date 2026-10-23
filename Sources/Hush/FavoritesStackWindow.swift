@@ -141,11 +141,21 @@ struct StackView: View {
                         .accessibilityLabel("\(card.unread) unread")
                 }
                 if top {
-                    HStack(spacing: 6) {
-                        if !card.sender.isEmpty { Text(card.sender).font(.system(size: 12, weight: .medium)) }
-                        Text(timeText(card.date)).font(.system(size: 11.5)).foregroundStyle(.secondary)
+                    let shown = FavoritesStack.shownLines(for: card)
+                    if card.unread > shown.count {
+                        Text("+\(card.unread - shown.count) earlier").font(.system(size: 11)).foregroundStyle(.tertiary)
                     }
-                    Text(card.text).font(.system(size: 14)).lineLimit(8).frame(maxWidth: .infinity, alignment: .leading)
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(shown) { line in
+                            VStack(alignment: .leading, spacing: 1) {
+                                HStack(spacing: 6) {
+                                    if !line.sender.isEmpty { Text(line.sender).font(.system(size: 12, weight: .medium)) }
+                                    Text(timeText(line.date)).font(.system(size: 11.5)).foregroundStyle(.secondary)
+                                }
+                                Text(line.text).font(.system(size: 14)).lineLimit(shown.count > 1 ? 3 : 8).frame(maxWidth: .infinity, alignment: .leading)
+                            }
+                        }
+                    }
                 }
                 Spacer(minLength: 0)
                 if top, let error = model.stackError {
