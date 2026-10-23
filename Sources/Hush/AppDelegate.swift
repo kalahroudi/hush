@@ -13,6 +13,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
     private var statusItem: NSStatusItem!
     /// Created on open and dropped on close: a retained popover keeps its window and backing surfaces alive.
     private var popover: NSPopover?
+    private var statusDirty = false
     private var settingsWindow: NSWindow?
     private let model = AppModel.shared
 
@@ -187,6 +188,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
     func popoverDidClose(_ notification: Notification) {
         popover?.contentViewController = nil   // release the popover's views while hidden
         popover = nil                          // and its window, so no backing surfaces linger
+        if statusDirty { applyStatus() }
         Task {                                 // let the views deinit, then hand freed heap pages back to the OS
             try? await Task.sleep(for: .milliseconds(300))
             malloc_zone_pressure_relief(nil, 0)
@@ -247,12 +249,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
     }
 
     /// Re-reads the menu bar glyph whenever unread count, connection or sign-in state changes. No timers.
-    private func watchStatus() {
+    private func watchStatus() { applyStatus(); observeStatus() }
+
+    private func applyStatus() {
         statusItem.button?.image = StatusIcon.image(model.iconState)
         let n = model.menuBarCount
+        // A width change while the popover is open moves the button, and the popover's arrow slides with it. Apply it on close.
+        if popover?.isShown == true { statusDirty = true; return }   // observation is re-armed, so close only has to apply
+        statusDirty = false
         statusItem.button?.title = n > 0 ? " \(n > 99 ? "99+" : String(n))" : ""
         statusItem.button?.imagePosition = n > 0 ? .imageLeading : .imageOnly
         statusItem.length = n > 0 ? NSStatusItem.variableLength : NSStatusItem.squareLength
+    }
+
+    private func observeStatus() {
         withObservationTracking { _ = model.iconState; _ = model.menuBarCount } onChange: { [weak self] in
             Task { @MainActor in self?.watchStatus() }
         }
