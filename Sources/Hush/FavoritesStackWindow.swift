@@ -8,6 +8,25 @@ import HushKit
 final class StackPanel: NSPanel {
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
+    /// Gets each key press first; return true when the stack used it. This does not depend on SwiftUI focus, so the arrows work as soon as the stack opens.
+    var onKey: ((StackKey) -> Bool)?
+
+    override func sendEvent(_ event: NSEvent) {
+        if event.type == .keyDown, !event.modifierFlags.contains(.command), let key = Self.key(for: event), onKey?(key) == true { return }
+        super.sendEvent(event)
+    }
+
+    private static func key(for event: NSEvent) -> StackKey? {
+        switch event.keyCode {
+        case 126: .up
+        case 125: .down
+        case 123: .left
+        case 124: .right
+        case 36, 76: .return
+        case 53: .escape
+        default: event.charactersIgnoringModifiers.map { .character($0) }
+        }
+    }
 }
 
 /// The focus view: layered cards, or a short message when there is nothing to read. No list, tabs or search.
@@ -26,21 +45,7 @@ struct StackView: View {
             }
         }
         .frame(width: 460, height: 360)
-        .focusable().focusEffectDisabled()
-        .onKeyPress(.escape) { close(); return .handled }
-        .onKeyPress(.downArrow) { move(forward: true) }
-        .onKeyPress(.rightArrow) { move(forward: true) }
-        .onKeyPress(.upArrow) { move(forward: false) }
-        .onKeyPress(.leftArrow) { move(forward: false) }
         .background(ScrollCatcher { forward in _ = move(forward: forward) })
-        .onKeyPress("d") {
-            guard model.stackMode == .cards, !model.stackReplying else { return .ignored }
-            model.markStackDone(); return .handled
-        }
-        .onKeyPress(.return) {
-            guard model.stackMode == .cards, !model.stackReplying else { return .ignored }
-            model.stackReplying = true; return .handled
-        }
         .overlay(alignment: .topTrailing) {
             Button(action: close) { Image(systemName: "xmark.circle.fill").font(.system(size: 18)) }
                 .buttonStyle(.plain).foregroundStyle(.secondary).padding(8)
@@ -56,24 +61,41 @@ struct StackView: View {
 
     private var cards: some View {
         let motion = StackMotion.resolve(reduceMotion: reduceMotion)
-        let layers = FavoritesStack.layers(count: model.stackCards.count, selection: model.stackSelection)
+        let layers = FavoritesStack.visibleCards(model.stackCards, selection: model.stackSelection)
         return ZStack {
-            ForEach(layers.reversed(), id: \.index) { layer in
-                CardView(card: model.stackCards[layer.index], top: layer.depth == 0, model: model, close: close)
+            ForEach(layers.reversed(), id: \.card.id) { layer in
+                CardView(card: layer.card, top: layer.depth == 0, model: model, close: close)
+                    .overlay {   // each card further back is a little darker, so the deck reads as layers
+                        RoundedRectangle(cornerRadius: 16).fill(.black.opacity(Double(layer.depth) * (scheme == .dark ? 0.12 : 0.05))).allowsHitTesting(false)
+                    }
                     .contentShape(RoundedRectangle(cornerRadius: 16))
-                    .onTapGesture { if layer.depth > 0 { select(layer.index) } }   // click a peeking card to bring it up
-                    .scaleEffect(1 - CGFloat(layer.depth) * 0.05, anchor: .top)
-                    .offset(y: CGFloat(layer.depth) * 14)
-                    .opacity(1 - Double(layer.depth) * 0.12)
+                    .onTapGesture { if layer.depth > 0 { select(layer.card.id) } }   // click a peeking card to bring it up
+                    .scaleEffect(x: 1 - CGFloat(layer.depth) * 0.05, y: 1, anchor: .top)
+                    .offset(y: CGFloat(layer.depth) * Self.peek)
                     .zIndex(Double(-layer.depth))
                     .transition(!motion.moves ? .opacity : .asymmetric(insertion: .opacity, removal: .move(edge: .leading).combined(with: .opacity)))
             }
         }
-        .padding(.horizontal, 24).padding(.bottom, 40).padding(.top, 20)
+        .padding(.horizontal, 24).padding(.bottom, 24 + Self.peek * CGFloat(FavoritesStack.visibleDepth - 1)).padding(.top, 30)
+        .overlay(alignment: .top) { positionDots }
         .animation(motion == .fade ? .easeInOut(duration: motion.duration) : .spring(duration: motion.duration), value: model.stackSelection)
     }
 
-    private func select(_ index: Int) { model.stackSelection = min(max(index, 0), model.stackCards.count - 1) }
+    /// How far each card behind shows below the one in front.
+    private static let peek: CGFloat = 16
+
+    private var positionDots: some View {
+        let count = model.stackCards.count
+        return HStack(spacing: 5) {
+            ForEach(0..<min(count, 12), id: \.self) { i in
+                Circle().fill(i == model.stackSelection ? Theme.accent : Color.secondary.opacity(0.4)).frame(width: 6, height: 6)
+            }
+        }
+        .padding(.top, 12)
+        .accessibilityHidden(true)
+    }
+
+    private func select(_ id: Int64) { if let i = model.stackCards.firstIndex(where: { $0.id == id }) { model.stackSelection = i } }
 
     private func message(_ title: String, _ detail: String, symbol: String) -> some View {
         VStack(spacing: 8) {
@@ -128,11 +150,22 @@ struct StackView: View {
                 Spacer(minLength: 0)
                 if top { reply }
             }
+            .overlay(alignment: .bottom) {   // the strip of a card behind shows who it is from
+                if !top {
+                    HStack {
+                        Text(card.title).lineLimit(1)
+                        Spacer()
+                        Text("\(card.unread)").font(.system(size: 10.5, weight: .semibold, design: .monospaced))
+                    }
+                    .font(.system(size: 11, weight: .medium)).foregroundStyle(.secondary)
+                    .padding(.horizontal, 16).frame(height: 16).padding(.bottom, 1)
+                }
+            }
             .padding(18)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .background(Theme.card, in: RoundedRectangle(cornerRadius: 16))
             .overlay(RoundedRectangle(cornerRadius: 16).stroke(Theme.hairline))
-            .shadow(color: .black.opacity((top ? 0.25 : 0.12) * (scheme == .dark ? 2 : 1)), radius: top ? 18 : 8, y: top ? 8 : 3)
+            .shadow(color: .black.opacity((top ? 0.25 : 0.12) * (scheme == .dark ? 2 : 1)), radius: top ? 18 : 6, y: top ? 8 : 2)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(FavoritesStack.accessibilityLabel(for: card))
             .modifier(CardActions(enabled: top, model: model, close: close))

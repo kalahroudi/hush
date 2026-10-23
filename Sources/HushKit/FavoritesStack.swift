@@ -231,3 +231,38 @@ public enum StackMotion: Equatable, Sendable {
     /// Whether outgoing cards travel across the window. A fade keeps every card in place.
     public var moves: Bool { self == .slide }
 }
+
+extension FavoritesStack {
+    /// The cards to draw with their depth (0 = top), taken from `cards` itself so a view never indexes a list that has since shrunk.
+    public static func visibleCards(_ cards: [StackCard], selection: Int) -> [(card: StackCard, depth: Int)] {
+        layers(count: cards.count, selection: selection).map { (cards[$0.index], $0.depth) }
+    }
+}
+
+/// A key pressed over the stack window.
+public enum StackKey: Equatable, Sendable {
+    case up, down, left, right, `return`, escape, character(String)
+}
+
+/// What a key does in the stack.
+public enum StackKeyAction: Equatable, Sendable {
+    case next, previous, reply, done, close
+    /// Leave the reply field, keeping the draft, so the arrow keys move between cards again.
+    case cancelReply
+}
+
+extension StackKey {
+    /// The action for a key, or nil to let it through (to the reply field while replying).
+    /// While replying only Esc is ours: it leaves the field first, and only the next Esc closes the stack.
+    public func action(replying: Bool, mode: StackMode) -> StackKeyAction? {
+        if self == .escape { return replying ? .cancelReply : .close }
+        guard mode == .cards, !replying else { return nil }
+        switch self {
+        case .down, .right: return .next
+        case .up, .left: return .previous
+        case .return: return .reply
+        case .character(let c): return c.lowercased() == "d" ? .done : nil
+        case .escape: return nil
+        }
+    }
+}

@@ -103,6 +103,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
         w.isMovableByWindowBackground = true
         w.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         w.delegate = self
+        w.onKey = { [weak self] key in self?.handleStackKey(key) ?? false }
         w.contentView = NSHostingView(rootView: StackView(close: { [weak self] in self?.closeStack() }))
         let screen = NSScreen.screens.first { NSMouseInRect(NSEvent.mouseLocation, $0.frame, false) } ?? NSScreen.main
         if let f = screen?.visibleFrame { w.setFrameOrigin(NSPoint(x: f.midX - w.frame.width / 2, y: f.midY - w.frame.height / 2)) } else { w.center() }
@@ -110,6 +111,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
         model.stackOpen = true
         NSApp.activate(ignoringOtherApps: true)
         w.makeKeyAndOrderFront(nil)
+    }
+
+    /// Runs a key pressed over the stack. Returns false to let the key through, e.g. to the reply field.
+    private func handleStackKey(_ key: StackKey) -> Bool {
+        guard let action = key.action(replying: model.stackReplying, mode: model.stackMode) else { return false }
+        switch action {
+        case .next: model.stepStack(forward: true)
+        case .previous: model.stepStack(forward: false)
+        case .reply: model.stackReplying = true
+        case .done: model.markStackDone()
+        case .cancelReply: model.stackReplying = false
+        case .close: closeStack()
+        }
+        return true
     }
 
     func closeStack() {
