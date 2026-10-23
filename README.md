@@ -54,7 +54,16 @@ Then sign in with your phone number and the code Telegram sends you.
 - **Conversation.** Messages read like a log: time, name, text. Photos, voice notes and files appear as a marker such as `[photo]`. Nothing is downloaded.
 - **Typing.** Type and press Return. That is the whole input.
 - **Keyboard.** Up and Down move the highlight in the chat list, Return opens the highlighted chat. Tab and Shift+Tab open the next or previous chat, even while typing in the message box, and wrap around at the ends. In the popover, Tab opens the first chat and Shift+Tab the last. The same list is in Settings under Shortcuts.
-- **Favorites stack.** Press Control+Option+S (the default) from any app to see unread messages from your favorite chats as a stack of cards, newest on top. Down and Right go to the next card, Up and Left to the previous one, Esc closes it. Press the shortcut again to close it too.
+- **Favorites stack.** A focus view of what your favorite chats just said. Star a chat in its conversation, then press Control+Option+S (the default, changeable in Settings, Shortcuts) from any app. A floating deck shows one card per starred chat with unread messages, newest on top, with the sender, time, text and unread count. Cards behind peek out below, and dots at the top show your position. The stack never wraps.
+  - **Move.** Down or Right goes to the next card, Up or Left to the previous one. You can also scroll or swipe, or click a card behind to bring it up.
+  - **Reply.** Press Return or click the Reply box and type. Return sends and clears the card.
+  - **Done.** Press D or click Done to mark the chat read and remove its card without replying.
+  - **Close.** Esc, the close button, or the shortcut again. While you type a reply, the first Esc leaves the box (keeping your draft) and the second closes the stack.
+  - **Live.** New messages from favorites join the open stack. While you reply, new chats wait and join when you finish, so the card you are on never moves.
+  - **Empty.** If nothing is unread it says so, and tells you when you have gone through every card.
+  - **Accessible.** Each card is read out by VoiceOver with actions for next, previous, reply, mark read and close, and motion is reduced if you ask macOS for that.
+
+<p align="center"><img src="docs/assets/stack.png" alt="The favorites stack: a deck of cards for unread favorite chats" width="420"></p>
 - **Banners for favorites.** Star a chat inside its conversation and it shows a banner for new messages. Everything else stays silent. Muted chats never notify.
 
 <p align="center"><img src="docs/assets/thread.png" alt="A conversation as plain text lines" width="420"></p>

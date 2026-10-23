@@ -34,7 +34,13 @@ enum SnapshotMode {
         func window(_ name: String, dark: Bool = false) -> Shot {
             Shot(name: name + (dark ? "-dark" : ""), dark: dark, size: CGSize(width: 780, height: 520)) { Demo.thread(); return AnyView(ChatWindowView(openSettings: {})) }
         }
-        return [window("window"), window("window", dark: true), pop("inbox", Demo.inbox), pop("inbox", dark: true, Demo.inbox), pop("thread", Demo.thread), pop("thread", dark: true, Demo.thread),
+        func stack(_ name: String, dark: Bool = false) -> Shot {
+            Shot(name: name + (dark ? "-dark" : ""), dark: dark, size: CGSize(width: 560, height: 440)) {
+                Demo.stack()
+                return AnyView(StackView(close: {}).frame(maxWidth: .infinity, maxHeight: .infinity).background(Color(white: dark ? 0.1 : 0.82)))
+            }
+        }
+        return [stack("stack"), stack("stack", dark: true), window("window"), window("window", dark: true), pop("inbox", Demo.inbox), pop("inbox", dark: true, Demo.inbox), pop("thread", Demo.thread), pop("thread", dark: true, Demo.thread),
                 pop("setup", Demo.setup), settings("settings"), settings("settings", dark: true), settings("agents", agents: true)]
     }
 
@@ -113,6 +119,23 @@ struct PopoverShot: View {
             Line(id: 4, date: at(37), sender: "Mara", text: "[photo] menu", outgoing: false),
             Line(id: 5, date: at(38), sender: "Mara", text: "ok see you at 7", outgoing: false),
         ], open: chats[0])
+    }
+
+    /// Three favorite chats with unread messages, as the stack shows them.
+    static func stack() {
+        install()
+        func at(_ h: Int, _ m: Int) -> Date { Calendar.current.date(bySettingHour: h, minute: m, second: 0, of: .now) ?? .now }
+        func card(_ id: Int64, _ title: String, _ unread: Int, _ sender: String, _ text: String, _ date: Date) -> StackCard {
+            StackCard(id: id, title: title, unread: unread, lines: [Line(id: id, date: date, sender: sender, text: text, outgoing: false)], sender: sender, text: text, date: date)
+        }
+        let m = AppModel.shared
+        m.stackCards = [
+            card(1, "Mara", 2, "Mara", "dinner at that place on Hale St, ok see you at 7", at(9, 38)),
+            card(2, "Build alerts", 1, "CI", "main: release job passed", at(9, 12)),
+            card(3, "Dad", 1, "Dad", "Call me when you land", at(8, 50)),
+        ]
+        m.stackSelection = 0
+        m.stackMode = .cards
     }
 
     static func setup() {
