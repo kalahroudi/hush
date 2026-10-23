@@ -199,12 +199,31 @@ struct ThreadView: View {
                     .textSelection(.enabled)
                     .padding(.horizontal, 14).padding(.vertical, 10)
                 }
-                .onChange(of: s.lines.last?.id) { _, id in if let id, pinnedToBottom { proxy.scrollTo(id, anchor: .bottom) } }
-                .onAppear { if let id = s.lines.last?.id { proxy.scrollTo(id, anchor: .bottom) } }
+                // Follow new messages while the reader is at the bottom, and always follow their own.
+                .onChange(of: s.lines.last?.id) { _, id in if let id, pinnedToBottom || s.lines.last?.outgoing == true { proxy.scrollTo(id, anchor: .bottom) } }
+                // A different chat opens at its newest message, whatever the previous one was scrolled to.
+                .onChange(of: chat?.id) { _, _ in jumpToLatest(proxy) }
+                .onAppear { jumpToLatest(proxy) }
+                .overlay(alignment: .bottomTrailing) {
+                    if !pinnedToBottom, !s.lines.isEmpty {
+                        Button { jumpToLatest(proxy, animated: true) } label: {
+                            Image(systemName: "chevron.down").font(.system(size: 12, weight: .semibold)).frame(width: 28, height: 28)
+                                .background(.regularMaterial, in: Circle()).overlay(Circle().strokeBorder(Color.primary.opacity(0.15)))
+                        }
+                        .buttonStyle(.plain).padding(12).help("Jump to the latest message").accessibilityLabel("Jump to the latest message")
+                        .transition(.opacity)
+                    }
+                }
+                .animation(.easeOut(duration: 0.15), value: pinnedToBottom)
             }
             ComposeField(text: draft, onSend: send, onTab: onSwitch)
                 .padding(.horizontal, 14).padding(.vertical, 10).overlay(alignment: .top) { Divider() }
         }
+    }
+
+    private func jumpToLatest(_ proxy: ScrollViewProxy, animated: Bool = false) {
+        guard let id = model.session.lines.last?.id else { return }
+        if animated { withAnimation { proxy.scrollTo(id, anchor: .bottom) } } else { proxy.scrollTo(id, anchor: .bottom) }
     }
 
     private func send() {
