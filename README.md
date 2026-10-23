@@ -107,9 +107,15 @@ An agent skill that explains when and how to use the tools is in [`skills/hush`]
 
 Hush checks GitHub Releases at most once a day and updates in place, keeping the previous version until the new one has started successfully. Settings, Updates also offers the main branch, built from source.
 
+## What you need
+
+- **Releases (the default):** nothing. The DMG is prebuilt, so no Xcode or developer tools are required, and installing and updating never show a toolchain message.
+- **Main channel:** a full Xcode install, or one selected with `xcode-select -s`. Hush uses SwiftUI macros such as `@State`, and the plugin that expands them ships with Xcode, not with the Command Line Tools alone. Before building, Hush runs a short test compile. If it fails, the update stops with an explanation and your current Hush is untouched. Fix it by installing or selecting full Xcode, or switch the channel back to Releases. If Xcode is installed but not selected, Hush finds it and uses it without changing your `xcode-select` setting.
+- **Building from source:** the same full Xcode (Swift 6.0, macOS 14 or later), plus TDLib (see below).
+
 ## Build from source
 
-Needs the Xcode command line tools. To run the app, first open it once and let setup download TDLib, or build the library yourself with `scripts/build-tdlib.sh` (needs `brew install cmake gperf openssl@3`).
+Needs a full Xcode (the Command Line Tools alone cannot expand SwiftUI macros). To run the app, first open it once and let setup download TDLib, or build the library yourself with `scripts/build-tdlib.sh` (needs `brew install cmake gperf openssl@3`).
 
 ```sh
 swift build && swift test
