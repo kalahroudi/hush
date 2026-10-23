@@ -87,6 +87,22 @@ public enum Toolchain {
         }
     }
 
+    /// The source install sequence: choose a toolchain, fetch the source, then build with that toolchain's
+    /// `DEVELOPER_DIR`. Nothing is fetched or built when no toolchain passes the probe.
+    public static func installFromSource<Source>(
+        run: Runner,
+        xcodeApps: () -> [String] = installedXcodes,
+        selected: (Selection) -> Void = { _ in },
+        fetch: () async throws -> Source,
+        build: (_ source: Source, _ env: [String: String]) async throws -> Void
+    ) async throws -> Source {
+        let selection = try await resolve(run: run, xcodeApps: xcodeApps)
+        selected(selection)
+        let source = try await fetch()
+        try await build(source, selection.env)
+        return source
+    }
+
     /// One log line naming the toolchain used for a build. Callers pass it through `Privacy.scrub`.
     public static func logLine(_ s: Selection) -> String {
         "Toolchain: \(s.developerDir ?? "selected by xcode-select"), \(s.swiftVersion)"

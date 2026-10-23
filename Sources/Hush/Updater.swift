@@ -138,14 +138,21 @@ final class Updater {
         beginRun(to: info.sha); step = "Preparing"
         do {
             try preflight()
-            phase = .working("Getting the source"); step = "Getting the source"
+            phase = .working("Checking the build tools"); step = "Checking the build tools"
             let src = root.appendingPathComponent("source", isDirectory: true)
-            let head = try await fetchSource(into: src, sha: info.sha)
-
-            phase = .working("Building. This takes a few minutes"); step = "Building"
             let staging = root.appendingPathComponent("staging", isDirectory: true)
-            try? FileManager.default.removeItem(at: staging)
-            try await run("/usr/bin/nice", ["-n", "10", "/bin/bash", "scripts/bundle.sh", build.version], cwd: src, env: ["DIST_DIR": staging.path]) { .buildFailed($0) }
+            let head = try await Toolchain.installFromSource(
+                run: Self.toolchainRunner,
+                selected: { choice in Task { @MainActor in Updater.shared.append(Privacy.scrub(Toolchain.logLine(choice))) } },
+                fetch: {
+                    phase = .working("Getting the source"); step = "Getting the source"
+                    return try await fetchSource(into: src, sha: info.sha)
+                },
+                build: { _, env in
+                    phase = .working("Building. This takes a few minutes"); step = "Building"
+                    try? FileManager.default.removeItem(at: staging)
+                    try await run("/usr/bin/nice", ["-n", "10", "/bin/bash", "scripts/bundle.sh", build.version], cwd: src, env: env.merging(["DIST_DIR": staging.path]) { _, new in new }) { .buildFailed($0) }
+                })
 
             phase = .working("Checking the new build"); step = "Checking the new build"
             let staged = staging.appendingPathComponent("Hush.app")
@@ -157,6 +164,12 @@ final class Updater {
         } catch {
             fail(error)
         }
+    }
+
+    /// Runs the toolchain probe's commands for real. A tool that cannot start or times out counts as a failure.
+    private static let toolchainRunner: Toolchain.Runner = { tool, args, env in
+        guard let r = try? await Shell.run(tool, args, env: env, timeout: Toolchain.probeTimeout) else { return .init(status: 1) }
+        return .init(status: r.status, text: r.stdout + r.stderr)
     }
 
     /// Prebuilt path: download the disk image, check its hash, unpack, verify, swap. No Xcode tools needed.

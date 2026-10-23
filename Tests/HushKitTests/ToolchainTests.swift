@@ -114,4 +114,30 @@ final class ToolchainTests: XCTestCase {
         XCTAssertEqual(UpdateChannel(stored: "junk"), .releases)
         XCTAssertEqual(UpdateChannel(stored: "main"), .main)
     }
+
+    func testProbeRunsBeforeFetchAndBuildAndBuildGetsDeveloperDir() async throws {
+        let calls = Calls()
+        let clt = "/Library/Developer/CommandLineTools"
+        _ = try await Toolchain.installFromSource(
+            run: fakeRunner(selected: clt, good: [xcode], calls: calls), xcodeApps: { ["/Applications/Xcode.app"] },
+            fetch: { calls.add("fetch"); return "src" },
+            build: { _, env in calls.add("build DEVELOPER_DIR=\(env["DEVELOPER_DIR"] ?? "-")") })
+        let all = calls.all
+        XCTAssertLessThan(all.firstIndex { $0.contains("swiftc") }!, all.firstIndex(of: "fetch")!)
+        XCTAssertEqual(all.last, "build DEVELOPER_DIR=\(xcode)")
+    }
+
+    func testFailingProbeNeitherFetchesNorBuilds() async {
+        let calls = Calls()
+        do {
+            _ = try await Toolchain.installFromSource(
+                run: fakeRunner(selected: "/Library/Developer/CommandLineTools", good: [], calls: calls), xcodeApps: { [] },
+                fetch: { calls.add("fetch"); return 1 },
+                build: { _, _ in calls.add("build") })
+            XCTFail("should have stopped")
+        } catch {
+            XCTAssertTrue(error is UpdateError)
+        }
+        XCTAssertFalse(calls.all.contains("fetch") || calls.all.contains("build"))
+    }
 }
