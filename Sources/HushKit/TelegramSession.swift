@@ -192,7 +192,9 @@ public final class TelegramSession {
     /// Marks a chat read without opening it, using the same `viewMessages` request as `open`.
     public func markRead(chatId: Int64) async throws {
         guard let c = client else { throw TDError(code: 0, message: "Not connected to Telegram.") }
-        guard let last = try await history(chatId: chatId, limit: 1).last else { return }
+        // After a reply the newest line is our own, which does not clear the unread count: mark the newest incoming one.
+        let recent = try await history(chatId: chatId, limit: 20)
+        guard let last = recent.last(where: { !$0.outgoing }) ?? recent.last else { return }
         c.send(["@type": "viewMessages", "chat_id": chatId, "message_ids": [last.id], "force_read": true])
     }
 

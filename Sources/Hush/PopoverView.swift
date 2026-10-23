@@ -161,6 +161,9 @@ struct ThreadView: View {
     @State private var sending = false
     /// True while the end of the history is on screen, so a new message only scrolls a reader who is already at the bottom.
     @State private var pinnedToBottom = true
+    @State private var bottomOffset: CGFloat = 0
+    @State private var viewportHeight: CGFloat = 0
+    private static let bottomID = "thread-bottom"
     private var draft: Binding<String> {
         let id = model.session.openChat?.id ?? 0
         return Binding(get: { model.draftMessages[id] ?? "" }, set: { model.draftMessages[id] = $0.isEmpty ? nil : $0 })
@@ -183,22 +186,26 @@ struct ThreadView: View {
             }
             ScrollViewReader { proxy in
                 ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 3) {
+                    // Not lazy: a chat holds a few dozen lines, and estimated row heights made scrollTo land short of the end.
+                    VStack(alignment: .leading, spacing: 3) {
                         ForEach(s.lines) { l in
                             (Text(l.date.formatted(date: .omitted, time: .shortened) + "  ").font(.system(size: 10.5, design: .monospaced)).foregroundColor(.secondary)
                              + Text(l.sender + " ").font(.system(size: 13.5, weight: .semibold)).foregroundColor(l.outgoing ? Theme.accent : .primary)
                              + Text(l.text).font(.system(size: 13.5)).foregroundColor(l.text.hasPrefix("[") && l.text.hasSuffix("]") ? .secondary : .primary))
                                 .frame(maxWidth: .infinity, alignment: .leading).id(l.id)
                         }
-                        // Lazy rows realize this only near the end, so it tells us whether the reader is at the bottom.
-                        Color.clear.frame(height: 1)
-                            .onAppear { pinnedToBottom = true }
-                            .onDisappear { pinnedToBottom = false }
+                        // Reports where the end of the thread sits, so we know whether the reader is near the bottom.
+                        Color.clear.frame(height: 1).id(Self.bottomID)
+                            .background(GeometryReader { g in Color.clear.preference(key: BottomOffsetKey.self, value: g.frame(in: .named("thread")).minY) })
                     }
                     // Selection is enabled once on the container, not on every row: per-row selectable text can swallow wheel events.
                     .textSelection(.enabled)
                     .padding(.horizontal, 14).padding(.vertical, 10)
                 }
+                .coordinateSpace(name: "thread")
+                .background(GeometryReader { g in Color.clear.preference(key: ViewportHeightKey.self, value: g.size.height) })
+                .onPreferenceChange(BottomOffsetKey.self) { bottomOffset = $0; pinnedToBottom = bottomOffset <= viewportHeight + 120 }
+                .onPreferenceChange(ViewportHeightKey.self) { viewportHeight = $0; pinnedToBottom = bottomOffset <= viewportHeight + 120 }
                 // Follow new messages while the reader is at the bottom, and always follow their own.
                 .onChange(of: s.lines.last?.id) { _, id in if id != nil, pinnedToBottom || s.lines.last?.outgoing == true { jumpToLatest(proxy) } }
                 // A different chat opens at its newest message, whatever the previous one was scrolled to.
@@ -223,8 +230,8 @@ struct ThreadView: View {
 
     private func jumpToLatest(_ proxy: ScrollViewProxy, animated: Bool = false) {
         func go() {
-            guard let id = model.session.lines.last?.id else { return }
-            if animated { withAnimation { proxy.scrollTo(id, anchor: .bottom) } } else { proxy.scrollTo(id, anchor: .bottom) }
+            guard !model.session.lines.isEmpty else { return }
+            if animated { withAnimation { proxy.scrollTo(Self.bottomID, anchor: .bottom) } } else { proxy.scrollTo(Self.bottomID, anchor: .bottom) }
         }
         go()
         // A just-appended row of the lazy stack isn't laid out yet, so the first scroll can land short; repeat once it is.
@@ -285,4 +292,14 @@ struct SetupScreen: View {
     var body: some View {
         ScrollView { SetupView(compact: true).padding(18) }
     }
+}
+
+private struct BottomOffsetKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
+}
+
+private struct ViewportHeightKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
 }
