@@ -183,12 +183,13 @@ struct ThreadView: View {
                 }
             }
             ScrollView {
-                VStack(alignment: .leading, spacing: 3) {
-                    ForEach(s.lines) { l in
-                        (Text(l.date.formatted(date: .omitted, time: .shortened) + "  ").font(.system(size: 10.5, design: .monospaced)).foregroundColor(.secondary)
-                         + Text(l.sender + " ").font(.system(size: 13.5, weight: .semibold)).foregroundColor(l.outgoing ? Theme.accent : .primary)
-                         + Text(l.text).font(.system(size: 13.5)).foregroundColor(l.text.hasPrefix("[") && l.text.hasSuffix("]") ? .secondary : .primary))
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                let showNames = ThreadLayout.showsSenders(s.lines)
+                VStack(spacing: 0) {
+                    ForEach(ThreadLayout.build(s.lines)) { item in
+                        switch item {
+                        case .day(let d): DayDivider(day: d)
+                        case .run(let r): RunView(run: r, showName: showNames && !r.outgoing)
+                        }
                     }
                 }
                 // Selection is enabled once on the container, not on every row: per-row selectable text can swallow wheel events.
@@ -222,6 +223,46 @@ struct ThreadView: View {
             do { try await model.session.send(text, to: id) } catch { model.draftMessages[id] = text; model.report(error, area: "Sending a message") }
             sending = false
         }
+    }
+}
+
+private struct DayDivider: View {
+    let day: Date
+    var body: some View {
+        Text(ThreadLayout.dayLabel(day)).font(.system(size: 11.5, weight: .medium)).foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity).padding(.top, 14).padding(.bottom, 2)
+    }
+}
+
+/// Their messages are plain text, yours sit right on a faint tint; one small time sits under the run's last message.
+private struct RunView: View {
+    let run: ThreadRun
+    let showName: Bool
+
+    var body: some View {
+        let out = run.outgoing
+        HStack(spacing: 0) {
+            if out { Spacer(minLength: 48) }
+            VStack(alignment: out ? .trailing : .leading, spacing: 1) {
+                if showName { Text(run.sender).font(.system(size: 11.5, weight: .medium)).foregroundStyle(.secondary) }
+                ForEach(Array(run.lines.enumerated()), id: \.element.id) { i, l in
+                    let marker = l.text.hasPrefix("[") && l.text.hasSuffix("]")
+                    let text = Text(l.text).font(.system(size: 13.5)).foregroundColor(marker ? .secondary : .primary).italic(marker)
+                    if out {
+                        text.padding(.horizontal, 12).padding(.vertical, 6)
+                            .background(Theme.accentSoft, in: UnevenRoundedRectangle(
+                                topLeadingRadius: 16, bottomLeadingRadius: 16,
+                                bottomTrailingRadius: i == run.lines.count - 1 ? 16 : 5, topTrailingRadius: i == 0 ? 16 : 5))
+                    } else {
+                        text.padding(.vertical, 3)
+                    }
+                }
+                Text(run.time.formatted(date: .omitted, time: .shortened)).font(.system(size: 10.5).monospacedDigit()).foregroundStyle(.secondary)
+                    .padding(.top, 2).padding(.horizontal, out ? 4 : 0)
+            }
+            if !out { Spacer(minLength: 48) }
+        }
+        .padding(.top, 12)
     }
 }
 

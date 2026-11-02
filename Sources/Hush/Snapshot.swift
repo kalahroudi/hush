@@ -112,7 +112,11 @@ struct PopoverShot: View {
     static func thread() {
         inbox()
         func at(_ m: Int) -> Date { Calendar.current.date(bySettingHour: 9, minute: m, second: 0, of: .now) ?? .now }
+        func yesterday(_ h: Int, _ m: Int) -> Date { Calendar.current.date(byAdding: .day, value: -1, to: Calendar.current.date(bySettingHour: h, minute: m, second: 0, of: .now) ?? .now) ?? .now }
         AppModel.shared.session.loadDemo(chats: chats, unread: 2, lines: [
+            Line(id: 10, date: yesterday(20, 14), sender: "Mara", text: "did the keys turn up?", outgoing: false),
+            Line(id: 11, date: yesterday(20, 20), sender: "You", text: "found them in the green coat", outgoing: true),
+            Line(id: 12, date: yesterday(20, 21), sender: "You", text: "thanks for the nudge", outgoing: true),
             Line(id: 1, date: at(30), sender: "Mara", text: "are you free tonight?", outgoing: false),
             Line(id: 2, date: at(31), sender: "You", text: "yes, what time", outgoing: true),
             Line(id: 3, date: at(37), sender: "Mara", text: "dinner at that place on Hale St", outgoing: false),

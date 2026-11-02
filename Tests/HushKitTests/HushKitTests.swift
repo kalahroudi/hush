@@ -751,3 +751,38 @@ final class StackMouseTests: XCTestCase {
         XCTAssertEqual(FavoritesStack.shownLines(for: card).map(\.text), ["hi"])
     }
 }
+
+final class ThreadLayoutTests: XCTestCase {
+    private var cal: Calendar { var c = Calendar(identifier: .gregorian); c.timeZone = TimeZone(identifier: "UTC")!; return c }
+    private func at(_ day: Int, _ h: Int, _ m: Int) -> Date { cal.date(from: DateComponents(year: 2026, month: 11, day: day, hour: h, minute: m))! }
+    private func line(_ id: Int64, _ date: Date, _ who: String, out: Bool = false) -> Line { Line(id: id, date: date, sender: who, text: "m\(id)", outgoing: out) }
+
+    private func runs(_ items: [ThreadItem]) -> [[Int64]] { items.compactMap { if case .run(let r) = $0 { return r.lines.map(\.id) } else { return nil } } }
+
+    func testRunsSplitOnSenderGapAndDay() {
+        let lines = [line(1, at(2, 9, 0), "A"), line(2, at(2, 9, 4), "A"), line(3, at(2, 9, 10), "A"),
+                     line(4, at(2, 9, 11), "Me", out: true), line(5, at(2, 9, 12), "A"), line(6, at(3, 0, 5), "A")]
+        let items = ThreadLayout.build(lines, calendar: cal)
+        XCTAssertEqual(runs(items), [[1, 2], [3], [4], [5], [6]])
+        XCTAssertEqual(items.filter { if case .day = $0 { return true } else { return false } }.count, 2)
+    }
+
+    func testExactlyFiveMinutesStaysInRun() {
+        XCTAssertEqual(runs(ThreadLayout.build([line(1, at(2, 9, 0), "A"), line(2, at(2, 9, 5), "A")], calendar: cal)), [[1, 2]])
+    }
+
+    func testSendersShownOnlyWhenSeveralPeopleWrite() {
+        XCTAssertFalse(ThreadLayout.showsSenders([line(1, at(2, 9, 0), "A"), line(2, at(2, 9, 1), "Me", out: true)]))
+        XCTAssertTrue(ThreadLayout.showsSenders([line(1, at(2, 9, 0), "A"), line(2, at(2, 9, 1), "B")]))
+    }
+
+    func testDayLabels() {
+        let now = at(2, 12, 0), en = Locale(identifier: "en_US")
+        func label(_ d: Date) -> String { ThreadLayout.dayLabel(cal.startOfDay(for: d), now: now, calendar: cal, locale: en) }
+        XCTAssertEqual(label(at(2, 3, 0)), "Today")
+        XCTAssertEqual(label(at(1, 3, 0)), "Yesterday")
+        XCTAssertEqual(label(cal.date(from: DateComponents(year: 2026, month: 10, day: 30))!), "Friday")
+        XCTAssertEqual(label(cal.date(from: DateComponents(year: 2026, month: 10, day: 23))!), "Oct 23")
+        XCTAssertEqual(label(cal.date(from: DateComponents(year: 2025, month: 12, day: 14))!), "Dec 14, 2025")
+    }
+}
